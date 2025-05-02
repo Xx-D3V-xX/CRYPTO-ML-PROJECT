@@ -31,9 +31,9 @@ matplotlib-inline==0.1.7
 missingno==0.5.2
 nbclient==0.10.2
 nbformat==5.10.4
-numpy#==2.2.5
+numpy
 packaging==25.0
-pandas#==2.2.3
+pandas
 papermill==2.6.0
 parso==0.8.4
 pillow==11.2.1
@@ -46,7 +46,6 @@ pyparsing==3.2.3
 python-dateutil==2.9.0.post0
 python-slugify==8.0.4
 pytz==2025.2
-#pywin32==310
 PyYAML==6.0.2
 pyzmq==26.4.0
 referencing==0.36.2
