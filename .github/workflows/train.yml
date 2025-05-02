@@ -1,0 +1,67 @@
+name: CI - Full Pipeline
+
+on:
+  push:
+    branches: [ main ]
+
+jobs:
+  pipeline:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repo
+        uses: actions/checkout@v4
+
+      - name: Setup Python 3.13
+        uses: actions/setup-python@v4
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Configure Kaggle API
+        run: |
+          mkdir -p ~/.kaggle
+          echo "{\"username\":\"${{ secrets.KAGGLE_USERNAME }}\",\"key\":\"${{ secrets.KAGGLE_KEY }}\"}" \
+            > ~/.kaggle/kaggle.json
+          chmod 600 ~/.kaggle/kaggle.json
+
+      - name: Download raw datasets
+        run: |
+          mkdir -p data/raw
+          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw --unzip
+          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada \
+            -p data/raw --unzip
+          kaggle datasets download -d oliviervha/crypto-news -p data/raw --unzip
+
+      - name: Run EDA Notebook
+        run: |
+          mkdir -p reports
+          papermill \
+            notebooks/1_eda_preprocessing.ipynb \
+            reports/1_eda_preprocessing_output.ipynb \
+            -p RAW data/raw -p INTERIM data/interim
+
+      - name: Run Feature Engineering Notebook
+        run: |
+          papermill \
+            notebooks/2_feature_engineering.ipynb \
+            reports/2_feature_engineering_output.ipynb \
+            -p INTERIM data/interim -p PROCESSED data/processed
+
+      - name: Run Modeling Notebook
+        run: |
+          papermill \
+            notebooks/3_modeling.ipynb \
+            reports/3_modeling_output.ipynb \
+            -p PROCESSED data/processed
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: pipeline-results
+          path: |
+            reports/*.ipynb
+            src/models/*.pkl
