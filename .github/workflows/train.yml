@@ -33,21 +33,20 @@ jobs:
             > ~/.kaggle/kaggle.json
           chmod 600 ~/.kaggle/kaggle.json
 
-      - name: Download raw datasets
+      - name: Download & flatten raw datasets
         run: |
           mkdir -p data/raw
-          
+
+          # Download all three datasets
           kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw --unzip
-          mv data/raw/coinmarketcap-historical-data/*.csv data/raw/
-          rm -rf data/raw/coinmarketcap-historical-data
-
           kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw --unzip
-          mv data/raw/historical-sentiment-data-btc-eth-bnb-ada/*.csv data/raw/
-          rm -rf data/raw/historical-sentiment-data-btc-eth-bnb-ada
-
           kaggle datasets download -d oliviervha/crypto-news -p data/raw --unzip
-          mv data/raw/crypto-news/*.csv data/raw/
-          rm -rf data/raw/crypto-news
+
+          # Move any CSV that lives in a subfolder up into data/raw/
+          find data/raw -mindepth 2 -maxdepth 2 -type f -name '*.csv' -exec mv {} data/raw/ \;
+
+          # Remove any subdirectories now that their CSVs are flattened
+          find data/raw -mindepth 1 -type d -exec rm -rf {} +
 
       - name: Run EDA Notebook
         run: |
