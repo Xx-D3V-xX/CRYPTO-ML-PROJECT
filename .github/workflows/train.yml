@@ -68,6 +68,11 @@ jobs:
             -p DATA_RAW data/raw \
             -p DATA_INTERIM data/interim
 
+      - name: "Debug: list interim files"
+        run: |
+          echo "data/interim contents:"
+          ls -l data/interim || echo "  <no such dir or no files>"
+
       - name: Run Feature Engineering Notebook
         run: |
           papermill \
@@ -75,6 +80,11 @@ jobs:
             reports/2_feature_engineering_output.ipynb \
             -p DATA_INTERIM data/interim \
             -p DATA_PROCESSED data/processed
+
+      - name: "Debug: list processed files"
+        run: |
+          echo "data/processed contents:"
+          ls -l data/processed || echo "  <no such dir or no files>"
 
       - name: Run Modeling Notebook
         run: |
@@ -86,7 +96,9 @@ jobs:
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: pipeline-results
+          name: pipeline-overview
           path: |
             reports/*.ipynb
             src/models/*.pkl
+            data/processed/
+            data/interim/
