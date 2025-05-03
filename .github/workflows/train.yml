@@ -14,12 +14,17 @@ jobs:
       - name: Setup Python 3.13
         uses: actions/setup-python@v4
         with:
-          python-version: "3.13"
+          python-version: "3.13"  
 
       - name: Install dependencies
         run: |
           pip install --upgrade pip
           pip install -r requirements.txt
+
+      - name: Install & register python3 kernel
+        run: |
+          pip install ipykernel
+          python -m ipykernel install --user --name python3 --display-name python3
 
       - name: Configure Kaggle API
         run: |
