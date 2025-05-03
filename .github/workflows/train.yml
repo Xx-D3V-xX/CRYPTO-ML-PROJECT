@@ -35,6 +35,8 @@ jobs:
 
       - name: Download & flatten raw datasets
         run: |
+          set -e
+
           mkdir -p data/raw
 
           # Download all three datasets
@@ -43,10 +45,13 @@ jobs:
           kaggle datasets download -d oliviervha/crypto-news -p data/raw --unzip
 
           # Move any CSV that lives in a subfolder up into data/raw/
-          find data/raw -mindepth 2 -maxdepth 2 -type f -name '*.csv' -exec mv {} data/raw/ \;
+          find data/raw -mindepth 2 -type f -name '*.csv' -exec mv {} data/raw/ \;
 
           # Remove any subdirectories now that their CSVs are flattened
           find data/raw -mindepth 1 -type d -exec rm -rf {} +
+
+          echo "Contents of data/raw after flattening"
+          ls -l data/raw
 
       - name: Run EDA Notebook
         run: |
