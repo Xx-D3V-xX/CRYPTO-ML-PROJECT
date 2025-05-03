@@ -59,21 +59,23 @@ jobs:
           papermill \
             notebooks/1_eda_preprocessing.ipynb \
             reports/1_eda_preprocessing_output.ipynb \
-            -p RAW data/raw -p INTERIM data/interim
+            -p DATA_RAW data/raw \
+            -p DATA_INTERIM data/interim
 
       - name: Run Feature Engineering Notebook
         run: |
           papermill \
             notebooks/2_feature_engineering.ipynb \
             reports/2_feature_engineering_output.ipynb \
-            -p INTERIM data/interim -p PROCESSED data/processed
+            -p DATA_INTERIM data/interim \
+            -p DATA_PROCESSED data/processed
 
       - name: Run Modeling Notebook
         run: |
           papermill \
             notebooks/3_modeling.ipynb \
             reports/3_modeling_output.ipynb \
-            -p PROCESSED data/processed
+            -p DATA_PROCESSED data/processed
 
       - name: Upload artifacts
         uses: actions/upload-artifact@v4
