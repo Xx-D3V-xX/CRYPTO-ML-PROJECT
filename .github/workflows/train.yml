@@ -53,6 +53,12 @@ jobs:
           echo "Contents of data/raw after flattening"
           ls -l data/raw
 
+      - name: Prepare data folders
+        run: |
+          mkdir -p data/raw
+          mkdir -p data/interim
+          mkdir -p data/processed
+
       - name: Run EDA Notebook
         run: |
           mkdir -p reports
