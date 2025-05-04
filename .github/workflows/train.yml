@@ -66,7 +66,8 @@ jobs:
             notebooks/1_eda_preprocessing.ipynb \
             reports/1_eda_preprocessing_output.ipynb \
             -p DATA_RAW data/raw \
-            -p DATA_INTERIM data/interim
+            -p DATA_INTERIM data/interim \
+            --log-output
 
       - name: "Debug: list interim files"
         run: |
@@ -79,7 +80,8 @@ jobs:
             notebooks/2_feature_engineering.ipynb \
             reports/2_feature_engineering_output.ipynb \
             -p DATA_INTERIM data/interim \
-            -p DATA_PROCESSED data/processed
+            -p DATA_PROCESSED data/processed \
+            --log-output
 
       - name: "Debug: list processed files"
         run: |
