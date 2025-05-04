@@ -91,7 +91,7 @@ jobs:
           papermill \
             notebooks/3_modeling.ipynb \
             reports/3_modeling_output.ipynb \
-            -p DATA_PROCESSED data/processed
+            -p DATA_PROCESSED data/processed \
             --log-output
 
       - name: Upload artifacts
