@@ -77,7 +77,14 @@ jobs:
           python-version: '3.13'
 
       - name: Install dependencies
-        run: pip install papermill pandas seaborn scikit-learn missingno matplotlib
+        run: pip install papermill pandas seaborn scikit-learn missingno matplotlib ipykernel
+
+      - name: Install Jupyter kernel
+        run: |
+          python -m ipykernel install \
+            --sys-prefix \
+            --name python3 \
+            --display-name python3
 
       - name: Run Notebook 1:EDA & Preprocessing
         run: |
@@ -117,7 +124,14 @@ jobs:
           python-version: '3.13'
 
       - name: Install dependencies
-        run: pip install papermill pandas seaborn scikit-learn matplotlib
+        run: pip install papermill pandas seaborn scikit-learn matplotlib ipykernel
+
+      - name: Install Jupyter kernel
+        run: |
+          python -m ipykernel install \
+            --sys-prefix \
+            --name python3 \
+            --display-name python3
 
       - name: Run Notebook 2:Feature Engineering
         run: |
@@ -158,7 +172,14 @@ jobs:
           python-version: '3.13'
 
       - name: Install dependencies
-        run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib
+        run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib ipykernel
+
+      - name: Install Jupyter kernel
+        run: |
+          python -m ipykernel install \
+            --sys-prefix \
+            --name python3 \
+            --display-name python3
 
       - name: Run Notebook 3:Modeling
         run: |
