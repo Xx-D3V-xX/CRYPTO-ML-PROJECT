@@ -44,13 +44,20 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.ref }}
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Install Kaggle CLI & IPython kernel
+      # 1) Setup Python first
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      # 2) Install all needed packages (including kaggle, papermill, pandas, etc.)
+      - name: Install dependencies & IPython kernel
         run: |
-          pip install kaggle ipykernel jupyter_client
+          pip install --upgrade pip
+          pip install kaggle papermill pandas seaborn scikit-learn missingno matplotlib ipykernel jupyter_client
           # register a 'python3' kernel under --user
           python -m ipykernel install --user --name python3 --display-name "Python 3"
 
@@ -81,14 +88,6 @@ jobs:
           kaggle datasets download -d oliviervha/crypto-news -p data/raw/
           unzip -o data/raw/crypto-news.zip -d data/raw/
 
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.13'
-
-      - name: Install notebook deps
-        run: pip install papermill pandas seaborn scikit-learn missingno matplotlib
-
       - name: Run Notebook 1:EDA & Preprocessing
         run: |
           mkdir -p reports data/interim
@@ -118,28 +117,25 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.ref }}
           fetch-depth: 0
           persist-credentials: true
-
-      - name: Download interim data
-        uses: actions/download-artifact@v4
-        with:
-          name: interim-data
-          path: data/interim/
-
-      - name: Install IPython kernel & deps
-        run: |
-          pip install ipykernel jupyter_client
-          python -m ipykernel install --user --name python3 --display-name "Python 3"
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
 
-      - name: Install notebook deps
-        run: pip install papermill pandas seaborn scikit-learn matplotlib
+      - name: Install dependencies & IPython kernel
+        run: |
+          pip install --upgrade pip
+          pip install papermill pandas seaborn scikit-learn matplotlib ipykernel jupyter_client
+          python -m ipykernel install --user --name python3 --display-name "Python 3"
+
+      - name: Download interim data
+        uses: actions/download-artifact@v4
+        with:
+          name: interim-data
+          path: data/interim/
 
       - name: Run Notebook 2:Feature Engineering
         run: |
@@ -171,28 +167,25 @@ jobs:
       - name: Checkout repo
         uses: actions/checkout@v3
         with:
-          ref: ${{ github.ref }}
           fetch-depth: 0
           persist-credentials: true
-
-      - name: Download processed data
-        uses: actions/download-artifact@v4
-        with:
-          name: processed-data
-          path: data/processed/
-
-      - name: Install IPython kernel & deps
-        run: |
-          pip install ipykernel jupyter_client
-          python -m ipykernel install --user --name python3 --display-name "Python 3"
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
 
-      - name: Install notebook deps
-        run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib
+      - name: Install dependencies & IPython kernel
+        run: |
+          pip install --upgrade pip
+          pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib ipykernel jupyter_client
+          python -m ipykernel install --user --name python3 --display-name "Python 3"
+
+      - name: Download processed data
+        uses: actions/download-artifact@v4
+        with:
+          name: processed-data
+          path: data/processed/
 
       - name: Run Notebook 3:Modeling
         run: |
