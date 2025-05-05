@@ -85,7 +85,7 @@ jobs:
             -p DATA_INTERIM data/interim
 
       - name: Upload interim data
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: interim-data
           path: data/interim/
@@ -99,10 +99,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Download interim data
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: interim-data
           path: data/interim/
@@ -125,7 +125,7 @@ jobs:
             -p DATA_PROCESSED data/processed
 
       - name: Upload processed data
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: processed-data
           path: data/processed/
@@ -140,10 +140,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       - name: Download processed data
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: processed-data
           path: data/processed/
@@ -166,7 +166,7 @@ jobs:
             -p MODEL_DIR src/models
 
       - name: Upload model artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: final-model
           path: src/models/
