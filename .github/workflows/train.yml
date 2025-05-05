@@ -51,8 +51,8 @@ jobs:
       - name: Install Kaggle CLI & IPython kernel
         run: |
           pip install kaggle ipykernel jupyter_client
-          # register a 'python3' kernel for papermill
-          python -m ipykernel install --name python3 --display-name "Python 3"
+          # register a 'python3' kernel under --user
+          python -m ipykernel install --user --name python3 --display-name "Python 3"
 
       - name: Configure Kaggle credentials
         run: |
@@ -131,7 +131,7 @@ jobs:
       - name: Install IPython kernel & deps
         run: |
           pip install ipykernel jupyter_client
-          python -m ipykernel install --name python3 --display-name "Python 3"
+          python -m ipykernel install --user --name python3 --display-name "Python 3"
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v4
@@ -184,7 +184,7 @@ jobs:
       - name: Install IPython kernel & deps
         run: |
           pip install ipykernel jupyter_client
-          python -m ipykernel install --name python3 --display-name "Python 3"
+          python -m ipykernel install --user --name python3 --display-name "Python 3"
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v4
