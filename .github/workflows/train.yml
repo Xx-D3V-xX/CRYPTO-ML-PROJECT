@@ -48,9 +48,13 @@ jobs:
       - name: Configure Kaggle credentials
         run: |
           mkdir -p ~/.kaggle
-          echo "${{ secrets.KAGGLE_USERNAME }}" > ~/.kaggle/username
-          echo "${{ secrets.KAGGLE_KEY }}"      > ~/.kaggle/key
-          chmod 600 ~/.kaggle/username ~/.kaggle/key
+          cat <<EOF > ~/.kaggle/kaggle.json
+          {
+            "username":"${{ secrets.KAGGLE_USERNAME }}",
+            "key":"${{ secrets.KAGGLE_KEY }}"
+          }
+          EOF
+          chmod 600 ~/.kaggle/kaggle.json
 
       - name: Download CoinMarketCap historical
         run: |
