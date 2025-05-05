@@ -17,6 +17,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
 
       - name: Detect changed notebooks
         id: filter
@@ -41,6 +43,10 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Install Kaggle CLI
         run: pip install kaggle
@@ -50,16 +56,17 @@ jobs:
           mkdir -p ~/.kaggle
           cat <<EOF > ~/.kaggle/kaggle.json
           {
-            "username":"${{ secrets.KAGGLE_USERNAME }}",
-            "key":"${{ secrets.KAGGLE_KEY }}"
+            "username": "${{ secrets.KAGGLE_USERNAME }}",
+            "key":      "${{ secrets.KAGGLE_KEY }}"
           }
           EOF
           chmod 600 ~/.kaggle/kaggle.json
 
       - name: Download CoinMarketCap historical
         run: |
+          mkdir -p data/raw
           kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/
-          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
+          unzip -o data/raw/coinmarketcap-historical-data.zip   -d data/raw/
 
       - name: Download Sentiment data (BTC/ETH/BNB/ADA)
         run: |
@@ -79,27 +86,23 @@ jobs:
       - name: Install dependencies
         run: pip install papermill pandas seaborn scikit-learn missingno matplotlib
 
-      - name: Register python3 kernel for Papermill
-        run: |
-          pip install ipykernel
-          python -m ipykernel install --user --name python3 --display-name "Python 3"
-
       - name: Run Notebook 1:EDA & Preprocessing
         run: |
           mkdir -p reports data/interim
           papermill \
             notebooks/1_eda_preprocessing.ipynb \
             reports/1_eda_preprocessing_output.ipynb \
-            -p DATA_RAW data/raw \
-            -p DATA_INTERIM data/interim
+            -p DATA_RAW       data/raw \
+            -p DATA_INTERIM   data/interim \
+            --log-output
 
-      - name: Commit & push raw/interim outputs back to repo
+      - name: Commit & push raw/interim outputs
         run: |
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/raw/ reports/ data/interim/
           git commit -m "ci: update raw + interim outputs" || echo "No changes to commit"
-          git push
+          git push origin HEAD:${{ github.ref_name }}
 
   fe:
     needs: [check_changes, eda]
@@ -111,6 +114,10 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Download interim data
         uses: actions/download-artifact@v4
@@ -126,27 +133,23 @@ jobs:
       - name: Install dependencies
         run: pip install papermill pandas seaborn scikit-learn matplotlib
 
-      - name: Register python3 kernel for Papermill
-        run: |
-          pip install ipykernel
-          python -m ipykernel install --user --name python3 --display-name "Python 3"
-
       - name: Run Notebook 2:Feature Engineering
         run: |
           mkdir -p reports data/processed
           papermill \
             notebooks/2_feature_engineering.ipynb \
             reports/2_feature_engineering_output.ipynb \
-            -p DATA_INTERIM data/interim \
-            -p DATA_PROCESSED data/processed
+            -p DATA_INTERIM   data/interim \
+            -p DATA_PROCESSED data/processed \
+            --log-output
 
-      - name: Commit & push processed outputs back to repo
+      - name: Commit & push processed outputs
         run: |
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/processed/ reports/
           git commit -m "ci: update processed outputs" || echo "No changes to commit"
-          git push
+          git push origin HEAD:${{ github.ref_name }}
 
   model:
     needs: [check_changes, fe]
@@ -159,6 +162,10 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
+        with:
+          ref: ${{ github.ref }}
+          fetch-depth: 0
+          persist-credentials: true
 
       - name: Download processed data
         uses: actions/download-artifact@v4
@@ -174,11 +181,6 @@ jobs:
       - name: Install dependencies
         run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib
 
-      - name: Register python3 kernel for Papermill
-        run: |
-          pip install ipykernel
-          python -m ipykernel install --user --name python3 --display-name "Python 3"
-
       - name: Run Notebook 3:Modeling
         run: |
           mkdir -p reports src/models
@@ -186,12 +188,13 @@ jobs:
             notebooks/3_modeling.ipynb \
             reports/3_modeling_output.ipynb \
             -p DATA_PROCESSED data/processed \
-            -p MODEL_DIR src/models
+            -p MODEL_DIR     src/models \
+            --log-output
 
-      - name: Commit & push model artifacts back to repo
+      - name: Commit & push model artifacts & reports
         run: |
-          git config user.name "github-actions[bot]"
+          git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add src/models/ reports/
-          git commit -m "ci: update model artifacts" || echo "No changes to commit"
-          git push
+          git commit -m "ci: update models + reports" || echo "No changes to commit"
+          git push origin HEAD:${{ github.ref_name }}
