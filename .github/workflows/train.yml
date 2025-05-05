@@ -1,7 +1,13 @@
 name: train
 
+# needed so that GITHUB_TOKEN can push changes
+permissions:
+  contents: write
+
 on:
   push:
+    branches:
+      - trial
     paths:
       - 'notebooks/**'
       - '.github/workflows/train.yml'
@@ -19,6 +25,7 @@ jobs:
         uses: actions/checkout@v3
         with:
           fetch-depth: 0
+          persist-credentials: true
 
       - name: Detect changed notebooks
         id: filter
@@ -47,18 +54,15 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      # 1) Setup Python first
       - name: Set up Python 3.13
         uses: actions/setup-python@v4
         with:
-          python-version: '3.13'
+          python-version: 3.13
 
-      # 2) Install all needed packages (including kaggle, papermill, pandas, etc.)
-      - name: Install dependencies & IPython kernel
+      - name: Install dependencies & register python3 kernel
         run: |
           pip install --upgrade pip
           pip install kaggle papermill pandas seaborn scikit-learn missingno matplotlib ipykernel jupyter_client
-          # register a 'python3' kernel under --user
           python -m ipykernel install --user --name python3 --display-name "Python 3"
 
       - name: Configure Kaggle credentials
@@ -72,19 +76,13 @@ jobs:
           EOF
           chmod 600 ~/.kaggle/kaggle.json
 
-      - name: Download CoinMarketCap historical
+      - name: Download raw datasets
         run: |
           mkdir -p data/raw
           kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/
           unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
-
-      - name: Download Sentiment data (BTC/ETH/BNB/ADA)
-        run: |
           kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/
           unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
-
-      - name: Download Crypto news
-        run: |
           kaggle datasets download -d oliviervha/crypto-news -p data/raw/
           unzip -o data/raw/crypto-news.zip -d data/raw/
 
@@ -98,13 +96,13 @@ jobs:
             -p DATA_INTERIM data/interim \
             --log-output
 
-      - name: Commit & push raw/interim outputs
+      - name: Commit & push raw + interim
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/raw/ data/interim/ reports/
-          git commit -m "ci: update raw + interim outputs" || echo "No changes to commit"
-          git push origin HEAD:${{ github.ref_name }}
+          git commit -m "ci: update raw & interim outputs" || echo "No changes to commit"
+          git push origin trial
 
   fe:
     needs: [check_changes, eda]
@@ -123,9 +121,9 @@ jobs:
       - name: Set up Python 3.13
         uses: actions/setup-python@v4
         with:
-          python-version: '3.13'
+          python-version: 3.13
 
-      - name: Install dependencies & IPython kernel
+      - name: Install dependencies & register python3 kernel
         run: |
           pip install --upgrade pip
           pip install papermill pandas seaborn scikit-learn matplotlib ipykernel jupyter_client
@@ -147,13 +145,13 @@ jobs:
             -p DATA_PROCESSED data/processed \
             --log-output
 
-      - name: Commit & push processed outputs
+      - name: Commit & push processed + reports
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add data/processed/ reports/
           git commit -m "ci: update processed outputs" || echo "No changes to commit"
-          git push origin HEAD:${{ github.ref_name }}
+          git push origin trial
 
   model:
     needs: [check_changes, fe]
@@ -173,9 +171,9 @@ jobs:
       - name: Set up Python 3.13
         uses: actions/setup-python@v4
         with:
-          python-version: '3.13'
+          python-version: 3.13
 
-      - name: Install dependencies & IPython kernel
+      - name: Install dependencies & register python3 kernel
         run: |
           pip install --upgrade pip
           pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib ipykernel jupyter_client
@@ -197,10 +195,10 @@ jobs:
             -p MODEL_DIR     src/models \
             --log-output
 
-      - name: Commit & push model artifacts & reports
+      - name: Commit & push models + reports
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
           git add src/models/ reports/
-          git commit -m "ci: update models + reports" || echo "No changes to commit"
-          git push origin HEAD:${{ github.ref_name }}
+          git commit -m "ci: update model artifacts & reports" || echo "No changes to commit"
+          git push origin trial
