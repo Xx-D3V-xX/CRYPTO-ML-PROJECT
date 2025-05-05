@@ -48,8 +48,11 @@ jobs:
           fetch-depth: 0
           persist-credentials: true
 
-      - name: Install Kaggle CLI
-        run: pip install kaggle
+      - name: Install Kaggle CLI & IPython kernel
+        run: |
+          pip install kaggle ipykernel jupyter_client
+          # register a 'python3' kernel for papermill
+          python -m ipykernel install --name python3 --display-name "Python 3"
 
       - name: Configure Kaggle credentials
         run: |
@@ -66,7 +69,7 @@ jobs:
         run: |
           mkdir -p data/raw
           kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/
-          unzip -o data/raw/coinmarketcap-historical-data.zip   -d data/raw/
+          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
 
       - name: Download Sentiment data (BTC/ETH/BNB/ADA)
         run: |
@@ -83,7 +86,7 @@ jobs:
         with:
           python-version: '3.13'
 
-      - name: Install dependencies
+      - name: Install notebook deps
         run: pip install papermill pandas seaborn scikit-learn missingno matplotlib
 
       - name: Run Notebook 1:EDA & Preprocessing
@@ -92,15 +95,15 @@ jobs:
           papermill \
             notebooks/1_eda_preprocessing.ipynb \
             reports/1_eda_preprocessing_output.ipynb \
-            -p DATA_RAW       data/raw \
-            -p DATA_INTERIM   data/interim \
+            -p DATA_RAW     data/raw \
+            -p DATA_INTERIM data/interim \
             --log-output
 
       - name: Commit & push raw/interim outputs
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
-          git add data/raw/ reports/ data/interim/
+          git add data/raw/ data/interim/ reports/
           git commit -m "ci: update raw + interim outputs" || echo "No changes to commit"
           git push origin HEAD:${{ github.ref_name }}
 
@@ -125,12 +128,17 @@ jobs:
           name: interim-data
           path: data/interim/
 
+      - name: Install IPython kernel & deps
+        run: |
+          pip install ipykernel jupyter_client
+          python -m ipykernel install --name python3 --display-name "Python 3"
+
       - name: Set up Python 3.13
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
 
-      - name: Install dependencies
+      - name: Install notebook deps
         run: pip install papermill pandas seaborn scikit-learn matplotlib
 
       - name: Run Notebook 2:Feature Engineering
@@ -173,12 +181,17 @@ jobs:
           name: processed-data
           path: data/processed/
 
+      - name: Install IPython kernel & deps
+        run: |
+          pip install ipykernel jupyter_client
+          python -m ipykernel install --name python3 --display-name "Python 3"
+
       - name: Set up Python 3.13
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
 
-      - name: Install dependencies
+      - name: Install notebook deps
         run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib
 
       - name: Run Notebook 3:Modeling
