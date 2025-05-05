@@ -77,7 +77,7 @@ jobs:
           python-version: '3.13'
 
       - name: Install dependencies
-        run: pip install papermill pandas seaborn scikit-learn missingno matplotlib ipykernel
+        run: pip install papermill pandas seaborn scikit-learn missingno matplotlib ipykernel ipython-autotime
 
       - name: Install Jupyter kernel
         run: |
@@ -124,7 +124,7 @@ jobs:
           python-version: '3.13'
 
       - name: Install dependencies
-        run: pip install papermill pandas seaborn scikit-learn matplotlib ipykernel
+        run: pip install papermill pandas seaborn scikit-learn matplotlib ipykernel ipython-autotime
 
       - name: Install Jupyter kernel
         run: |
@@ -172,7 +172,7 @@ jobs:
           python-version: '3.13'
 
       - name: Install dependencies
-        run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib ipykernel
+        run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib ipykernel ipython-autotime
 
       - name: Install Jupyter kernel
         run: |
