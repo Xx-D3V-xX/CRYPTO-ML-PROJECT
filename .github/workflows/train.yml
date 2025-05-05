@@ -1,107 +1,151 @@
-name: CI - Full Pipeline
+name: train
 
 on:
   push:
-    branches: [ main ]
+    paths:
+      - 'notebooks/**'
+      - '.github/workflows/train.yml'
 
 jobs:
-  pipeline:
+  check_changes:
+    runs-on: ubuntu-latest
+    outputs:
+      eda:    ${{ steps.filter.outputs.eda }}
+      fe:     ${{ steps.filter.outputs.fe }}
+      model:  ${{ steps.filter.outputs.model }}
+    steps:
+      - uses: actions/checkout@v3
+      - name: Detect which notebooks changed
+        id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            eda:
+              - 'notebooks/1_eda_preprocessing.ipynb'
+            fe:
+              - 'notebooks/2_feature_engineering.ipynb'
+            model:
+              - 'notebooks/3_modeling.ipynb'
+
+  eda:
+    needs: check_changes
+    if: needs.check_changes.outputs.eda == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
-      - name: Setup Python 3.13
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.13"  
+      - name: Install Kaggle CLI
+        run: pip install kaggle
 
-      - name: Install dependencies
-        run: |
-          pip install --upgrade pip
-          pip install -r requirements.txt
-
-      - name: Install & register python3 kernel
-        run: |
-          pip install ipykernel
-          python -m ipykernel install --user --name python3 --display-name python3
-
-      - name: Configure Kaggle API
+      - name: Configure Kaggle credentials
         run: |
           mkdir -p ~/.kaggle
-          echo "{\"username\":\"${{ secrets.KAGGLE_USERNAME }}\",\"key\":\"${{ secrets.KAGGLE_KEY }}\"}" \
-            > ~/.kaggle/kaggle.json
-          chmod 600 ~/.kaggle/kaggle.json
+          echo "${{ secrets.KAGGLE_USERNAME }}" > ~/.kaggle/username
+          echo "${{ secrets.KAGGLE_KEY }}"      > ~/.kaggle/key
+          chmod 600 ~/.kaggle/{username,key}
 
-      - name: Download & flatten raw datasets
+      - name: Download CoinMarketCap historical
         run: |
-          set -e
+          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/
+          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
 
-          mkdir -p data/raw
-
-          # Download all three datasets
-          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw --unzip
-          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw --unzip
-          kaggle datasets download -d oliviervha/crypto-news -p data/raw --unzip
-
-          # Move any CSV that lives in a subfolder up into data/raw/
-          find data/raw -mindepth 2 -type f -name '*.csv' -exec mv {} data/raw/ \;
-
-          # Remove any subdirectories now that their CSVs are flattened
-          find data/raw -mindepth 1 -type d -exec rm -rf {} +
-
-          echo "Contents of data/raw after flattening"
-          ls -l data/raw
-
-      - name: Prepare data folders
+      - name: Download Sentiment data (BTC/ETH/BNB/ADA)
         run: |
-          mkdir -p data/raw
-          mkdir -p data/interim
-          mkdir -p data/processed
+          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/
+          unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
 
-      - name: Run EDA Notebook
+      - name: Download Crypto news
         run: |
-          mkdir -p reports
+          kaggle datasets download -d oliviervha/crypto-news -p data/raw/
+          unzip -o data/raw/crypto-news.zip -d data/raw/
+
+      - name: Setup Python & deps
+        uses: actions/setup-python@v4
+        with: 
+          python-version: '3.13'
+      - run: pip install papermill pandas seaborn scikit-learn missingno matplotlib
+
+      - name: Run Notebook 1:EDA & Preprocessing
+        run: |
+          mkdir -p reports data/interim
           papermill \
             notebooks/1_eda_preprocessing.ipynb \
             reports/1_eda_preprocessing_output.ipynb \
             -p DATA_RAW data/raw \
-            -p DATA_INTERIM data/interim \
-            --log-output
+            -p DATA_INTERIM data/interim
 
-      - name: "Debug: list interim files"
-        run: |
-          echo "data/interim contents:"
-          ls -l data/interim || echo "  <no such dir or no files>"
+      - name: Upload interim data
+        uses: actions/upload-artifact@v3
+        with:
+          name: interim-data
+          path: data/interim/
 
-      - name: Run Feature Engineering Notebook
+  fe:
+    needs: [check_changes, eda]
+    if: needs.check_changes.outputs.eda == 'true' || needs.check_changes.outputs.fe == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download interim data
+        uses: actions/download-artifact@v3
+        with:
+          name: interim-data
+          path: data/interim/
+
+      - name: Setup Python & deps
+        uses: actions/setup-python@v4
+        with: 
+          python-version: '3.13'
+      - run: pip install papermill pandas seaborn scikit-learn matplotlib
+
+      - name: Run Notebook 2:Feature Engineering
         run: |
+          mkdir -p reports data/processed
           papermill \
             notebooks/2_feature_engineering.ipynb \
             reports/2_feature_engineering_output.ipynb \
             -p DATA_INTERIM data/interim \
-            -p DATA_PROCESSED data/processed \
-            --log-output
+            -p DATA_PROCESSED data/processed
 
-      - name: "Debug: list processed files"
-        run: |
-          echo "data/processed contents:"
-          ls -l data/processed || echo "  <no such dir or no files>"
+      - name: Upload processed data
+        uses: actions/upload-artifact@v3
+        with:
+          name: processed-data
+          path: data/processed/
 
-      - name: Run Modeling Notebook
+  model:
+    needs: [check_changes, fe]
+    if: needs.check_changes.outputs.eda == 'true' ||
+       needs.check_changes.outputs.fe  == 'true' ||
+       needs.check_changes.outputs.model == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download processed data
+        uses: actions/download-artifact@v3
+        with:
+          name: processed-data
+          path: data/processed/
+
+      - name: Setup Python & deps
+        uses: actions/setup-python@v4
+        with: 
+          python-version: '3.13'
+      - run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib
+
+      - name: Run Notebook 3:Modeling
         run: |
+          mkdir -p reports src/models
           papermill \
             notebooks/3_modeling.ipynb \
             reports/3_modeling_output.ipynb \
             -p DATA_PROCESSED data/processed \
-            --log-output
+            -p MODEL_DIR src/models
 
-      - name: Upload artifacts
-        uses: actions/upload-artifact@v4
+      - name: Upload model artifacts
+        uses: actions/upload-artifact@v3
         with:
-          name: pipeline-overview
-          path: |
-            reports/*.ipynb
-            src/models/*.pkl
-            data/processed/
-            data/interim/
+          name: final-model
+          path: src/models/
