@@ -10,15 +10,16 @@ jobs:
   check_changes:
     runs-on: ubuntu-latest
     outputs:
-      eda:    ${{ steps.filter.outputs.eda }}
-      fe:     ${{ steps.filter.outputs.fe }}
-      model:  ${{ steps.filter.outputs.model }}
-      config: ${{ steps.filter.outputs.config }}
+      eda:         ${{ steps.filter.outputs.eda }}
+      fe:          ${{ steps.filter.outputs.fe }}
+      model:       ${{ steps.filter.outputs.model }}
+      sensitivity: ${{ steps.filter.outputs.sensitivity }}
+      config:      ${{ steps.filter.outputs.config }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - name: Detect changed notebooks
+      - name: Detect changed notebooks & config
         id: filter
         uses: dorny/paths-filter@v3
         with:
@@ -29,18 +30,17 @@ jobs:
               - 'notebooks/2_feature_engineering.ipynb'
             model:
               - 'notebooks/3_modeling.ipynb'
+            sensitivity:
+              - 'notebooks/4_sensitivity.ipynb'
             config:
               - '.github/workflows/train.yml'
 
   eda:
     needs: check_changes
-    if: |
-      needs.check_changes.outputs.eda   == 'true' ||
-      needs.check_changes.outputs.config == 'true'
+    if: needs.check_changes.outputs.eda == 'true' || needs.check_changes.outputs.config == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Install Kaggle CLI
         run: pip install kaggle
@@ -71,20 +71,15 @@ jobs:
           kaggle datasets download -d oliviervha/crypto-news -p data/raw/
           unzip -o data/raw/crypto-news.zip -d data/raw/
 
-      - name: Set up Python 3.13
+      - name: Setup Python & dependencies
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
-
-      - name: Install dependencies
-        run: pip install papermill pandas seaborn scikit-learn missingno matplotlib ipykernel ipython-autotime
+      - run: pip install papermill pandas seaborn scikit-learn missingno matplotlib ipykernel ipython-autotime
 
       - name: Install Jupyter kernel
         run: |
-          python -m ipykernel install \
-            --sys-prefix \
-            --name python3 \
-            --display-name python3
+          python -m ipykernel install --sys-prefix --name python3 --display-name python3
 
       - name: Run Notebook 1:EDA & Preprocessing
         run: |
@@ -93,7 +88,8 @@ jobs:
             notebooks/1_eda_preprocessing.ipynb \
             reports/1_eda_preprocessing_output.ipynb \
             -p DATA_RAW data/raw \
-            -p DATA_INTERIM data/interim
+            -p DATA_INTERIM data/interim \
+            --log-output
 
       - name: Upload interim data
         uses: actions/upload-artifact@v4
@@ -101,16 +97,18 @@ jobs:
           name: interim-data
           path: data/interim/
 
+      - name: Upload EDA report
+        uses: actions/upload-artifact@v4
+        with:
+          name: eda-report
+          path: reports/1_eda_preprocessing_output.ipynb
+
   fe:
     needs: [check_changes, eda]
-    if: |
-      needs.check_changes.outputs.fe     == 'true' ||
-      needs.check_changes.outputs.eda    == 'true' ||
-      needs.check_changes.outputs.config == 'true'
+    if: needs.check_changes.outputs.fe == 'true' || needs.check_changes.outputs.eda == 'true' || needs.check_changes.outputs.config == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
       - name: Download interim data
         uses: actions/download-artifact@v4
@@ -118,20 +116,15 @@ jobs:
           name: interim-data
           path: data/interim/
 
-      - name: Set up Python 3.13
+      - name: Setup Python & dependencies
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
-
-      - name: Install dependencies
-        run: pip install papermill pandas seaborn scikit-learn matplotlib ipykernel ipython-autotime
+      - run: pip install papermill pandas seaborn scikit-learn matplotlib ipykernel ipython-autotime
 
       - name: Install Jupyter kernel
         run: |
-          python -m ipykernel install \
-            --sys-prefix \
-            --name python3 \
-            --display-name python3
+          python -m ipykernel install --sys-prefix --name python3 --display-name python3
 
       - name: Run Notebook 2:Feature Engineering
         run: |
@@ -140,7 +133,8 @@ jobs:
             notebooks/2_feature_engineering.ipynb \
             reports/2_feature_engineering_output.ipynb \
             -p DATA_INTERIM data/interim \
-            -p DATA_PROCESSED data/processed
+            -p DATA_PROCESSED data/processed \
+            --log-output
 
       - name: Upload processed data
         uses: actions/upload-artifact@v4
@@ -148,17 +142,18 @@ jobs:
           name: processed-data
           path: data/processed/
 
+      - name: Upload FE report
+        uses: actions/upload-artifact@v4
+        with:
+          name: fe-report
+          path: reports/2_feature_engineering_output.ipynb
+
   model:
     needs: [check_changes, fe]
-    if: |
-      needs.check_changes.outputs.model  == 'true' ||
-      needs.check_changes.outputs.fe     == 'true' ||
-      needs.check_changes.outputs.eda    == 'true' ||
-      needs.check_changes.outputs.config == 'true'
+    if: needs.check_changes.outputs.model == 'true' || needs.check_changes.outputs.fe == 'true' || needs.check_changes.outputs.eda == 'true' || needs.check_changes.outputs.config == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v4
+      - uses: actions/checkout@v3
 
       - name: Download processed data
         uses: actions/download-artifact@v4
@@ -166,20 +161,15 @@ jobs:
           name: processed-data
           path: data/processed/
 
-      - name: Set up Python 3.13
+      - name: Setup Python & dependencies
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
-
-      - name: Install dependencies
-        run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib ipykernel ipython-autotime
+      - run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib ipykernel ipython-autotime
 
       - name: Install Jupyter kernel
         run: |
-          python -m ipykernel install \
-            --sys-prefix \
-            --name python3 \
-            --display-name python3
+          python -m ipykernel install --sys-prefix --name python3 --display-name python3
 
       - name: Run Notebook 3:Modeling
         run: |
@@ -188,10 +178,62 @@ jobs:
             notebooks/3_modeling.ipynb \
             reports/3_modeling_output.ipynb \
             -p DATA_PROCESSED data/processed \
-            -p MODEL_DIR src/models
+            -p MODEL_DIR src/models \
+            --log-output
 
       - name: Upload model artifacts
         uses: actions/upload-artifact@v4
         with:
           name: final-model
           path: src/models/
+
+      - name: Upload Modeling report
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-report
+          path: reports/3_modeling_output.ipynb
+
+  sensitivity:
+    needs: [check_changes, model]
+    if: needs.check_changes.outputs.sensitivity == 'true' || needs.check_changes.outputs.model == 'true' || needs.check_changes.outputs.fe == 'true' || needs.check_changes.outputs.eda == 'true' || needs.check_changes.outputs.config == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Download processed data
+        uses: actions/download-artifact@v4
+        with:
+          name: processed-data
+          path: data/processed/
+
+      - name: Download model artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: final-model
+          path: src/models/
+
+      - name: Setup Python & dependencies
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+      - run: pip install papermill pandas seaborn scikit-learn matplotlib joblib ipykernel ipython-autotime
+
+      - name: Install Jupyter kernel
+        run: |
+          python -m ipykernel install --sys-prefix --name python3 --display-name python3
+
+      - name: Run Notebook 4:Sensitivity Tests
+        run: |
+          mkdir -p reports
+          papermill \
+            notebooks/4_sensitivity.ipynb \
+            reports/4_sensitivity_output.ipynb \
+            -p DATA_PROCESSED data/processed \
+            -p MODEL_DIR src/models \
+            --log-output
+
+      - name: Upload Sensitivity report
+        uses: actions/upload-artifact@v4
+        with:
+          name: sensitivity-report
+          path: reports/4_sensitivity_output.ipynb
