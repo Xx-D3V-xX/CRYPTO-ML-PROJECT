@@ -91,7 +91,7 @@ jobs:
             -p DATA_INTERIM data/interim \
             --log-output
 
-      - name: Upload interim data & EDA report as artifacts
+      - name: Upload interim data & EDA report
         uses: actions/upload-artifact@v4
         with:
           name: eda-outputs
@@ -105,7 +105,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/interim/ reports/1_eda_preprocessing_output.ipynb
           git commit -m "ci: update interim data & EDA report" || echo "No changes to commit"
-          git pull --rebase origin $BRANCH
+          git pull --rebase --autostash origin $BRANCH
           git push origin HEAD:$BRANCH
 
   fe:
@@ -144,7 +144,7 @@ jobs:
             -p DATA_PROCESSED data/processed \
             --log-output
 
-      - name: Upload processed data & FE report as artifacts
+      - name: Upload processed data & FE report
         uses: actions/upload-artifact@v4
         with:
           name: fe-outputs
@@ -158,7 +158,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/processed/ reports/2_feature_engineering_output.ipynb
           git commit -m "ci: update processed data & FE report" || echo "No changes to commit"
-          git pull --rebase origin $BRANCH
+          git pull --rebase --autostash origin $BRANCH
           git push origin HEAD:$BRANCH
 
   model:
@@ -213,7 +213,7 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/models/ reports/3_modeling_output.ipynb
           git commit -m "ci: update trained models & Modeling report" || echo "No changes to commit"
-          git pull --rebase origin $BRANCH
+          git pull --rebase --autostash origin $BRANCH
           git push origin HEAD:$BRANCH
 
   sensitivity:
@@ -255,7 +255,7 @@ jobs:
             -p MODEL_DIR src/models \
             --log-output
 
-      - name: Upload sensitivity report artifact
+      - name: Upload sensitivity report
         uses: actions/upload-artifact@v4
         with:
           name: sensitivity-report
@@ -267,5 +267,5 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add reports/4_sensitivity_output.ipynb
           git commit -m "ci: update sensitivity report" || echo "No changes to commit"
-          git pull --rebase origin $BRANCH
+          git pull --rebase --autostash origin $BRANCH
           git push origin HEAD:$BRANCH
