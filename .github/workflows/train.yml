@@ -1,7 +1,7 @@
 name: train
 
 permissions:
-  contents: write
+  contents: write    # allow pushing committed outputs back to the repo
 
 on:
   push:
@@ -40,7 +40,6 @@ jobs:
             config:
               - '.github/workflows/train.yml'
 
-
   eda:
     needs: check_changes
     if: needs.check_changes.outputs.eda == 'true' || needs.check_changes.outputs.config == 'true'
@@ -67,14 +66,14 @@ jobs:
 
       - name: Download raw datasets
         run: |
-          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/
-          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
-          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/
-          unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
-          kaggle datasets download -d oliviervha/crypto-news -p data/raw/
+          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/ && \
+          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/ && \
+          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/ && \
+          unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/ && \
+          kaggle datasets download -d oliviervha/crypto-news -p data/raw/ && \
           unzip -o data/raw/crypto-news.zip -d data/raw/
 
-      - name: Setup Python & deps
+      - name: Set up Python & deps
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
@@ -99,14 +98,13 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/interim/ reports/1_eda_preprocessing_output.ipynb
-          git commit -m "ci: update interim data & EDA report" || echo "No changes"
+          git commit -m "ci: update interim data & EDA report" || echo "⏩ no changes"
           git pull --rebase --autostash origin ${{ github.ref_name }}
           git push origin HEAD:${{ github.ref_name }}
 
-
   fe:
     needs: [check_changes, eda]
-    if: needs.check_changes.outputs.fe == 'true' || needs.check_changes.outputs.eda == 'true' || needs.check_changes.outputs.config == 'true'
+    if: needs.check_changes.outputs.fe == 'true' || needs.check_changes.outputs.config == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -114,15 +112,25 @@ jobs:
         with:
           persist-credentials: true
 
-      - name: Setup Python & deps
+      - name: Ensure interim data exists
+        run: |
+          mkdir -p data/interim
+          if [ ! -f data/interim/historical_clean.csv ]; then
+            echo "→ Missing interim data; running Notebook 1 to bootstrap…"
+            papermill notebooks/1_eda_preprocessing.ipynb /tmp/eda.ipynb \
+              -p DATA_RAW     data/raw \
+              -p DATA_INTERIM data/interim \
+              --log-output
+          fi
+
+      - name: Set up Python & deps
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
       - run: pip install papermill pandas seaborn scikit-learn matplotlib ipykernel ipython-autotime
 
       - name: Install Jupyter kernel
-        run: |
-          python -m ipykernel install --sys-prefix --name python3 --display-name python3
+        run: python -m ipykernel install --sys-prefix --name python3 --display-name python3
 
       - name: Run Notebook 2:Feature Engineering
         run: |
@@ -139,14 +147,13 @@ jobs:
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/processed/ reports/2_feature_engineering_output.ipynb
-          git commit -m "ci: update processed data & FE report" || echo "No changes"
+          git commit -m "ci: update processed data & FE report" || echo "⏩ no changes"
           git pull --rebase --autostash origin ${{ github.ref_name }}
           git push origin HEAD:${{ github.ref_name }}
 
-
   model:
     needs: [check_changes, fe]
-    if: needs.check_changes.outputs.model == 'true' || needs.check_changes.outputs.fe == 'true' || needs.check_changes.outputs.eda == 'true' || needs.check_changes.outputs.config == 'true'
+    if: needs.check_changes.outputs.model == 'true' || needs.check_changes.outputs.config == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -154,15 +161,14 @@ jobs:
         with:
           persist-credentials: true
 
-      - name: Setup Python & deps
+      - name: Set up Python & deps
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
       - run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib ipykernel ipython-autotime
 
       - name: Install Jupyter kernel
-        run: |
-          python -m ipykernel install --sys-prefix --name python3 --display-name python3
+        run: python -m ipykernel install --sys-prefix --name python3 --display-name python3
 
       - name: Run Notebook 3:Modeling
         run: |
@@ -174,19 +180,18 @@ jobs:
             -p MODEL_DIR      src/models \
             --log-output
 
-      - name: Commit modeling outputs
+      - name: Commit Modeling outputs
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/models/ reports/3_modeling_output.ipynb
-          git commit -m "ci: update models & modeling report" || echo "No changes"
+          git commit -m "ci: update models & modeling report" || echo "⏩ no changes"
           git pull --rebase --autostash origin ${{ github.ref_name }}
           git push origin HEAD:${{ github.ref_name }}
 
-
   sensitivity:
     needs: [check_changes, model]
-    if: needs.check_changes.outputs.sensitivity == 'true' || needs.check_changes.outputs.model == 'true' || needs.check_changes.outputs.fe == 'true' || needs.check_changes.outputs.eda == 'true' || needs.check_changes.outputs.config == 'true'
+    if: needs.check_changes.outputs.sensitivity == 'true' || needs.check_changes.outputs.config == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
@@ -194,15 +199,14 @@ jobs:
         with:
           persist-credentials: true
 
-      - name: Setup Python & deps
+      - name: Set up Python & deps
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
       - run: pip install papermill pandas seaborn scikit-learn matplotlib joblib ipykernel ipython-autotime
 
       - name: Install Jupyter kernel
-        run: |
-          python -m ipykernel install --sys-prefix --name python3 --display-name python3
+        run: python -m ipykernel install --sys-prefix --name python3 --display-name python3
 
       - name: Run Notebook 4:Sensitivity Tests
         run: |
@@ -214,11 +218,11 @@ jobs:
             -p MODEL_DIR      src/models \
             --log-output
 
-      - name: Commit sensitivity report
+      - name: Commit Sensitivity report
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add reports/4_sensitivity_output.ipynb
-          git commit -m "ci: update sensitivity report" || echo "No changes"
+          git commit -m "ci: update sensitivity report" || echo "⏩ no changes"
           git pull --rebase --autostash origin ${{ github.ref_name }}
           git push origin HEAD:${{ github.ref_name }}
