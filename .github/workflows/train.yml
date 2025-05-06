@@ -1,13 +1,14 @@
 name: train
 
+# Grant the workflow write access to repo contents
+permissions:
+  contents: write
+
 on:
   push:
     paths:
       - 'notebooks/**'
       - '.github/workflows/train.yml'
-
-env:
-  BRANCH: ${{ github.ref_name }}
 
 jobs:
   check_changes:
@@ -21,6 +22,8 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
+        with:
+          persist-credentials: true
 
       - name: Detect changed notebooks & config
         id: filter
@@ -62,14 +65,14 @@ jobs:
           EOF
           chmod 600 ~/.kaggle/kaggle.json
 
-      - name: Download raw datasets
+      - name: Download datasets
         run: |
-          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/ && \
-            unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
-          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/ && \
-            unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
-          kaggle datasets download -d oliviervha/crypto-news -p data/raw/ && \
-            unzip -o data/raw/crypto-news.zip -d data/raw/
+          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/
+          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
+          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/
+          unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
+          kaggle datasets download -d oliviervha/crypto-news -p data/raw/
+          unzip -o data/raw/crypto-news.zip -d data/raw/
 
       - name: Setup Python & deps
         uses: actions/setup-python@v4
@@ -87,26 +90,18 @@ jobs:
           papermill \
             notebooks/1_eda_preprocessing.ipynb \
             reports/1_eda_preprocessing_output.ipynb \
-            -p DATA_RAW data/raw \
+            -p DATA_RAW     data/raw \
             -p DATA_INTERIM data/interim \
             --log-output
 
-      - name: Upload interim data & EDA report
-        uses: actions/upload-artifact@v4
-        with:
-          name: eda-outputs
-          path: |
-            data/interim/
-            reports/1_eda_preprocessing_output.ipynb
-
-      - name: Commit interim + EDA report back to repo
+      - name: Commit interim data & EDA report
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/interim/ reports/1_eda_preprocessing_output.ipynb
-          git commit -m "ci: update interim data & EDA report" || echo "No changes to commit"
-          git pull --rebase --autostash origin $BRANCH
-          git push origin HEAD:$BRANCH
+          git commit -m "ci: update interim data & EDA report" || echo "No changes"
+          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git push origin HEAD:${{ github.ref_name }}
 
   fe:
     needs: [check_changes, eda]
@@ -118,10 +113,10 @@ jobs:
         with:
           persist-credentials: true
 
-      - name: Download interim data artifact
+      - name: Download interim data
         uses: actions/download-artifact@v4
         with:
-          name: eda-outputs
+          name: interim-data
           path: data/interim/
 
       - name: Setup Python & deps
@@ -140,26 +135,18 @@ jobs:
           papermill \
             notebooks/2_feature_engineering.ipynb \
             reports/2_feature_engineering_output.ipynb \
-            -p DATA_INTERIM data/interim \
+            -p DATA_INTERIM   data/interim \
             -p DATA_PROCESSED data/processed \
             --log-output
 
-      - name: Upload processed data & FE report
-        uses: actions/upload-artifact@v4
-        with:
-          name: fe-outputs
-          path: |
-            data/processed/
-            reports/2_feature_engineering_output.ipynb
-
-      - name: Commit processed data + FE report
+      - name: Commit processed data & FE report
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add data/processed/ reports/2_feature_engineering_output.ipynb
-          git commit -m "ci: update processed data & FE report" || echo "No changes to commit"
-          git pull --rebase --autostash origin $BRANCH
-          git push origin HEAD:$BRANCH
+          git commit -m "ci: update processed data & FE report" || echo "No changes"
+          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git push origin HEAD:${{ github.ref_name }}
 
   model:
     needs: [check_changes, fe]
@@ -171,13 +158,11 @@ jobs:
         with:
           persist-credentials: true
 
-      - name: Download FE outputs artifact
+      - name: Download processed data
         uses: actions/download-artifact@v4
         with:
-          name: fe-outputs
-          path: |
-            data/processed/
-            reports/2_feature_engineering_output.ipynb
+          name: processed-data
+          path: data/processed/
 
       - name: Setup Python & deps
         uses: actions/setup-python@v4
@@ -196,25 +181,17 @@ jobs:
             notebooks/3_modeling.ipynb \
             reports/3_modeling_output.ipynb \
             -p DATA_PROCESSED data/processed \
-            -p MODEL_DIR src/models \
+            -p MODEL_DIR      src/models \
             --log-output
 
-      - name: Upload model artifacts & Modeling report
-        uses: actions/upload-artifact@v4
-        with:
-          name: model-outputs
-          path: |
-            src/models/
-            reports/3_modeling_output.ipynb
-
-      - name: Commit models + Modeling report
+      - name: Commit models & modeling report
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add src/models/ reports/3_modeling_output.ipynb
-          git commit -m "ci: update trained models & Modeling report" || echo "No changes to commit"
-          git pull --rebase --autostash origin $BRANCH
-          git push origin HEAD:$BRANCH
+          git commit -m "ci: update models & model report" || echo "No changes"
+          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git push origin HEAD:${{ github.ref_name }}
 
   sensitivity:
     needs: [check_changes, model]
@@ -226,14 +203,17 @@ jobs:
         with:
           persist-credentials: true
 
-      - name: Download model-outputs artifact
+      - name: Download processed data
         uses: actions/download-artifact@v4
         with:
-          name: model-outputs
-          path: |
-            data/processed/
-            src/models/
-            reports/3_modeling_output.ipynb
+          name: processed-data
+          path: data/processed/
+
+      - name: Download model artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: final-model
+          path: src/models/
 
       - name: Setup Python & deps
         uses: actions/setup-python@v4
@@ -252,20 +232,14 @@ jobs:
             notebooks/4_sensitivity.ipynb \
             reports/4_sensitivity_output.ipynb \
             -p DATA_PROCESSED data/processed \
-            -p MODEL_DIR src/models \
+            -p MODEL_DIR      src/models \
             --log-output
-
-      - name: Upload sensitivity report
-        uses: actions/upload-artifact@v4
-        with:
-          name: sensitivity-report
-          path: reports/4_sensitivity_output.ipynb
 
       - name: Commit sensitivity report
         run: |
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git add reports/4_sensitivity_output.ipynb
-          git commit -m "ci: update sensitivity report" || echo "No changes to commit"
-          git pull --rebase --autostash origin $BRANCH
-          git push origin HEAD:$BRANCH
+          git commit -m "ci: update sensitivity report" || echo "No changes"
+          git pull --rebase --autostash origin ${{ github.ref_name }}
+          git push origin HEAD:${{ github.ref_name }}
