@@ -206,8 +206,8 @@ jobs:
           path: reports/3_modeling_output.ipynb
 
   sensitivity:
-    needs: check_changes
-    if: needs.check_changes.outputs.sensitivity == 'true' || needs.check_changes.outputs.config == 'true' || needs.check_changes.outputs.model == 'true' || needs.check_changes.outputs.fe == 'true' || needs.check_changes.outputs.eda == 'true'
+    needs: model
+    if: needs.check_changes.outputs.sensitivity == 'true' || needs.check_changes.outputs.config == 'true' || needs.check_changes.outputs.model == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
