@@ -10,17 +10,16 @@ jobs:
   check_changes:
     runs-on: ubuntu-latest
     outputs:
-      eda:         ${{ steps.filter.outputs.eda }}
-      fe:          ${{ steps.filter.outputs.fe }}
-      model:       ${{ steps.filter.outputs.model }}
-      sensitivity: ${{ steps.filter.outputs.sensitivity }}
-      config:      ${{ steps.filter.outputs.config }}
+      eda:    ${{ steps.filter.outputs.eda }}
+      fe:     ${{ steps.filter.outputs.fe }}
+      model:  ${{ steps.filter.outputs.model }}
+      config: ${{ steps.filter.outputs.config }}
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
 
-      - id: filter
-        name: Detect changed notebooks & config
+      - name: Detect changed notebooks & config
+        id: filter
         uses: dorny/paths-filter@v3
         with:
           filters: |
@@ -30,8 +29,6 @@ jobs:
               - 'notebooks/2_feature_engineering.ipynb'
             model:
               - 'notebooks/3_modeling.ipynb'
-            sensitivity:
-              - 'notebooks/4_sensitivity.ipynb'
             config:
               - '.github/workflows/train.yml'
 
@@ -52,22 +49,33 @@ jobs:
           cat <<EOF > ~/.kaggle/kaggle.json
           {
             "username":"${{ secrets.KAGGLE_USERNAME }}",
-            "key":"${{ secrets.KAGGLE_KEY }}"
+            "key":"${{ secrets.KAGGLE_KEY }}`
           }
           EOF
           chmod 600 ~/.kaggle/kaggle.json
 
-      - name: Download datasets
+      - name: Download CoinMarketCap historical
         run: |
-          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/ && unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
-          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/ && unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
-          kaggle datasets download -d oliviervha/crypto-news -p data/raw/ && unzip -o data/raw/crypto-news.zip -d data/raw/
+          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/
+          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
 
-      - uses: actions/setup-python@v4
-        name: Setup Python & deps
+      - name: Download Sentiment data (BTC/ETH/BNB/ADA)
+        run: |
+          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/
+          unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
+
+      - name: Download Crypto news
+        run: |
+          kaggle datasets download -d oliviervha/crypto-news -p data/raw/
+          unzip -o data/raw/crypto-news.zip -d data/raw/
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v4
         with:
           python-version: '3.13'
-      - run: pip install papermill pandas seaborn scikit-learn missingno matplotlib ipykernel ipython-autotime
+
+      - name: Install dependencies
+        run: pip install papermill pandas seaborn scikit-learn missingno matplotlib ipykernel ipython-autotime
 
       - name: Install Jupyter kernel
         run: |
@@ -83,35 +91,36 @@ jobs:
             -p DATA_INTERIM data/interim \
             --log-output
 
-      - uses: actions/upload-artifact@v4
-        name: Upload interim data
+      - name: Upload interim data
+        uses: actions/upload-artifact@v4
         with:
           name: interim-data
           path: data/interim/
 
-      - uses: actions/upload-artifact@v4
-        name: Upload EDA report
+      - name: Upload EDA report
+        uses: actions/upload-artifact@v4
         with:
           name: eda-report
           path: reports/1_eda_preprocessing_output.ipynb
 
   fe:
     needs: check_changes
-    if: needs.check_changes.outputs.fe     == 'true' ||
-       needs.check_changes.outputs.eda    == 'true' ||
+    if: needs.check_changes.outputs.fe  == 'true' ||
+       needs.check_changes.outputs.eda == 'true' ||
        needs.check_changes.outputs.config == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v4
-        name: Download interim data
+      - name: Download interim data (if newly created)
+        if: needs.check_changes.outputs.eda == 'true'
+        uses: actions/download-artifact@v4
         with:
           name: interim-data
           path: data/interim/
 
-      - uses: actions/setup-python@v4
-        name: Setup Python & deps
+      - name: Setup Python & dependencies
+        uses: actions/setup-python@v4
         with:
           python-version: '3.13'
       - run: pip install papermill pandas seaborn scikit-learn matplotlib ipykernel ipython-autotime
@@ -130,36 +139,37 @@ jobs:
             -p DATA_PROCESSED data/processed \
             --log-output
 
-      - uses: actions/upload-artifact@v4
-        name: Upload processed data
+      - name: Upload processed data
+        uses: actions/upload-artifact@v4
         with:
           name: processed-data
           path: data/processed/
 
-      - uses: actions/upload-artifact@v4
-        name: Upload FE report
+      - name: Upload FE report
+        uses: actions/upload-artifact@v4
         with:
           name: fe-report
           path: reports/2_feature_engineering_output.ipynb
 
   model:
     needs: [check_changes, fe]
-    if: needs.check_changes.outputs.model  == 'true' ||
-       needs.check_changes.outputs.fe     == 'true' ||
-       needs.check_changes.outputs.eda    == 'true' ||
-       needs.check_changes.outputs.config == 'true'
+    if: needs.check_changes.outputs.model == 'true' ||
+       needs.check_changes.outputs.fe    == 'true' ||
+       needs.check_changes.outputs.eda   == 'true' ||
+       needs.check_changes.outputs.config== 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v4
-        name: Download processed data
+      - name: Download processed data (if newly created)
+        if: needs.check_changes.outputs.fe == 'true'
+        uses: actions/download-artifact@v4
         with:
           name: processed-data
           path: data/processed/
 
-      - uses: actions/setup-python@v4
-        name: Setup Python & deps
+      - name: Setup Python & dependencies
+        uses: actions/setup-python@v4
         with:
           python-version: '3.13'
       - run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib ipykernel ipython-autotime
@@ -178,14 +188,14 @@ jobs:
             -p MODEL_DIR src/models \
             --log-output
 
-      - uses: actions/upload-artifact@v4
-        name: Upload model artifacts
+      - name: Upload model artifacts
+        uses: actions/upload-artifact@v4
         with:
           name: final-model
           path: src/models/
 
-      - uses: actions/upload-artifact@v4
-        name: Upload Modeling report
+      - name: Upload Modeling report
+        uses: actions/upload-artifact@v4
         with:
           name: model-report
           path: reports/3_modeling_output.ipynb
@@ -201,20 +211,8 @@ jobs:
     steps:
       - uses: actions/checkout@v3
 
-      - uses: actions/download-artifact@v4
-        name: Download processed data
-        with:
-          name: processed-data
-          path: data/processed/
-
-      - uses: actions/download-artifact@v4
-        name: Download model artifact
-        with:
-          name: final-model
-          path: src/models/
-
-      - uses: actions/setup-python@v4
-        name: Setup Python & deps
+      - name: Setup Python & dependencies
+        uses: actions/setup-python@v4
         with:
           python-version: '3.13'
       - run: pip install papermill pandas seaborn scikit-learn matplotlib joblib ipykernel ipython-autotime
@@ -233,8 +231,8 @@ jobs:
             -p MODEL_DIR src/models \
             --log-output
 
-      - uses: actions/upload-artifact@v4
-        name: Upload Sensitivity report
+      - name: Upload Sensitivity report
+        uses: actions/upload-artifact@v4
         with:
           name: sensitivity-report
           path: reports/4_sensitivity_output.ipynb
