@@ -8,13 +8,45 @@ jobs:
   eda:
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code + LFS raw data
+      - name: Checkout code (disable LFS)
         uses: actions/checkout@v3
         with:
-          lfs: true
+          lfs: false
 
-      - name: Fetch any missing LFS blobs
-        run: git lfs pull
+      - name: Install Kaggle CLI
+        run: pip install kaggle
+
+      - name: Configure Kaggle credentials
+        run: |
+          mkdir -p ~/.kaggle
+          cat <<EOF > ~/.kaggle/kaggle.json
+          {
+            "username": "${{ secrets.KAGGLE_USERNAME }}",
+            "key":      "${{ secrets.KAGGLE_KEY }}"
+          }
+          EOF
+          chmod 600 ~/.kaggle/kaggle.json
+
+      - name: Download CoinMarketCap historical
+        run: |
+          kaggle datasets download \
+            -d bizzyvinci/coinmarketcap-historical-data \
+            -p data/raw/
+          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
+
+      - name: Download Sentiment data (BTC/ETH/BNB/ADA)
+        run: |
+          kaggle datasets download \
+            -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada \
+            -p data/raw/
+          unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
+
+      - name: Download Crypto news
+        run: |
+          kaggle datasets download \
+            -d oliviervha/crypto-news \
+            -p data/raw/
+          unzip -o data/raw/crypto-news.zip -d data/raw/
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v4
@@ -23,8 +55,8 @@ jobs:
 
       - name: Install dependencies
         run: |
-          pip install papermill pandas seaborn scikit-learn missingno matplotlib \
-                      ipykernel ipython-autotime
+          pip install papermill pandas seaborn scikit-learn missingno \
+                      matplotlib ipykernel ipython-autotime
 
       - name: Install Jupyter kernel (python3)
         run: |
@@ -59,10 +91,12 @@ jobs:
     needs: eda
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout code (disable LFS)
         uses: actions/checkout@v3
+        with:
+          lfs: false
 
-      - name: Download interim data from EDA
+      - name: Download interim data
         uses: actions/download-artifact@v4
         with:
           name: interim-data
@@ -111,10 +145,12 @@ jobs:
     needs: fe
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout code
+      - name: Checkout code (disable LFS)
         uses: actions/checkout@v3
+        with:
+          lfs: false
 
-      - name: Download processed data from FE
+      - name: Download processed data
         uses: actions/download-artifact@v4
         with:
           name: processed-data
