@@ -142,7 +142,7 @@ jobs:
           path: data/processed/
 
       - name: Upload FE report
-        uses: actions-upload-artifact@v4
+        uses: actions/upload-artifact@v4
         with:
           name: fe-report
           path: reports/2_feature_engineering_output.ipynb
