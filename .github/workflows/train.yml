@@ -1,36 +1,136 @@
-name: Always Run Modeling
-
-permissions:
-  contents: write
+name: train
 
 on:
-  push: {}
+  push:
+    branches: [ main ]
 
 jobs:
-  modeling:
+  eda:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Check out repository (no LFS)
+      - name: Checkout code + LFS raw data
         uses: actions/checkout@v3
         with:
-          fetch-depth: 0
-          persist-credentials: true
+          lfs: true
+
+      - name: Fetch any missing LFS blobs
+        run: git lfs pull
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v4
         with:
-          python-version: "3.13"
+          python-version: '3.13'
 
       - name: Install dependencies
         run: |
-          pip install \
-            papermill \
-            pandas seaborn scikit-learn matplotlib \
-            xgboost lightgbm joblib \
-            ipykernel ipython-autotime
+          pip install papermill pandas seaborn scikit-learn missingno matplotlib \
+                      ipykernel ipython-autotime
 
-      - name: Install Jupyter kernel
+      - name: Install Jupyter kernel (python3)
+        run: |
+          python -m ipykernel install \
+            --sys-prefix \
+            --name python3 \
+            --display-name python3
+
+      - name: Run Notebook 1:EDA & Preprocessing
+        run: |
+          mkdir -p reports data/interim
+          papermill \
+            notebooks/1_eda_preprocessing.ipynb \
+            reports/1_eda_preprocessing_output.ipynb \
+            -p DATA_RAW     data/raw \
+            -p DATA_INTERIM data/interim \
+            --log-output
+
+      - name: Upload interim data
+        uses: actions/upload-artifact@v4
+        with:
+          name: interim-data
+          path: data/interim/
+
+      - name: Upload EDA report
+        uses: actions/upload-artifact@v4
+        with:
+          name: eda-report
+          path: reports/1_eda_preprocessing_output.ipynb
+
+  fe:
+    needs: eda
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download interim data from EDA
+        uses: actions/download-artifact@v4
+        with:
+          name: interim-data
+          path: data/interim/
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          pip install papermill pandas seaborn scikit-learn matplotlib \
+                      ipykernel ipython-autotime
+
+      - name: Install Jupyter kernel (python3)
+        run: |
+          python -m ipykernel install \
+            --sys-prefix \
+            --name python3 \
+            --display-name python3
+
+      - name: Run Notebook 2:Feature Engineering
+        run: |
+          mkdir -p reports data/processed
+          papermill \
+            notebooks/2_feature_engineering.ipynb \
+            reports/2_feature_engineering_output.ipynb \
+            -p DATA_INTERIM   data/interim \
+            -p DATA_PROCESSED data/processed \
+            --log-output
+
+      - name: Upload processed data
+        uses: actions/upload-artifact@v4
+        with:
+          name: processed-data
+          path: data/processed/
+
+      - name: Upload FE report
+        uses: actions/upload-artifact@v4
+        with:
+          name: fe-report
+          path: reports/2_feature_engineering_output.ipynb
+
+  model:
+    needs: fe
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v3
+
+      - name: Download processed data from FE
+        uses: actions/download-artifact@v4
+        with:
+          name: processed-data
+          path: data/processed/
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.13'
+
+      - name: Install dependencies
+        run: |
+          pip install papermill pandas seaborn scikit-learn matplotlib \
+                      xgboost lightgbm joblib ipykernel ipython-autotime
+
+      - name: Install Jupyter kernel (python3)
         run: |
           python -m ipykernel install \
             --sys-prefix \
@@ -39,21 +139,28 @@ jobs:
 
       - name: Run Notebook 3:Modeling
         run: |
-          mkdir -p reports src/models
+          mkdir -p reports src/models src/final_model
           papermill \
             notebooks/3_modeling.ipynb \
             reports/3_modeling_output.ipynb \
             -p DATA_PROCESSED data/processed \
-            -p MODEL_DIR      src/models \
+            -p MODEL_DIR     src/models \
             --log-output
 
-      - name: Commit & Push modeling outputs
-        uses: stefanzweifel/git-auto-commit-action@v4
+      - name: Upload all trained models
+        uses: actions/upload-artifact@v4
         with:
-          branch:           ${{ github.ref_name }}
-          commit_user_name:  github-actions[bot]
-          commit_user_email: github-actions[bot]@users.noreply.github.com
-          commit_message:          "ci: update models & modeling report"
-          file_pattern:     |
-            reports/3_modeling_output.ipynb
-            src/models/
+          name: all-models
+          path: src/models/
+
+      - name: Upload best final model
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-model
+          path: src/final_model/
+
+      - name: Upload Modeling report
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-report
+          path: reports/3_modeling_output.ipynb
