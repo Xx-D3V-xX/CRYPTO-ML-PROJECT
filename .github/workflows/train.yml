@@ -7,38 +7,12 @@ on:
       - '.github/workflows/train.yml'
 
 jobs:
-  check_changes:
+  run-all-notebooks:
     runs-on: ubuntu-latest
-    outputs:
-      eda:    ${{ steps.filter.outputs.eda }}
-      fe:     ${{ steps.filter.outputs.fe }}
-      model:  ${{ steps.filter.outputs.model }}
-      config: ${{ steps.filter.outputs.config }}
     steps:
-      - name: Checkout repo
+
+      - name: Checkout
         uses: actions/checkout@v3
-
-      - name: Detect changed notebooks & config
-        id: filter
-        uses: dorny/paths-filter@v3
-        with:
-          filters: |
-            eda:
-              - 'notebooks/1_eda_preprocessing.ipynb'
-            fe:
-              - 'notebooks/2_feature_engineering.ipynb'
-            model:
-              - 'notebooks/3_modeling.ipynb'
-            config:
-              - '.github/workflows/train.yml'
-
-  eda:
-    needs: check_changes
-    if: needs.check_changes.outputs.eda == 'true' ||
-        needs.check_changes.outputs.config == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
 
       - name: Install Kaggle CLI
         run: pip install kaggle
@@ -48,36 +22,33 @@ jobs:
           mkdir -p ~/.kaggle
           cat <<EOF > ~/.kaggle/kaggle.json
           {
-            "username":"${{ secrets.KAGGLE_USERNAME }}",
-            "key":"${{ secrets.KAGGLE_KEY }}`
+            "username": "${{ secrets.KAGGLE_USERNAME }}",
+            "key": "${{ secrets.KAGGLE_KEY }}"
           }
           EOF
           chmod 600 ~/.kaggle/kaggle.json
 
-      - name: Download CoinMarketCap historical
+      - name: Download raw datasets
         run: |
-          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/
-          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
+          rm -rf data/raw && mkdir -p data/raw
+          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/ \
+            && unzip -o data/raw/*.zip -d data/raw/ \
+          && kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/ \
+            && unzip -o data/raw/*.zip -d data/raw/ \
+          && kaggle datasets download -d oliviervha/crypto-news -p data/raw/ \
+            && unzip -o data/raw/*.zip -d data/raw/
 
-      - name: Download Sentiment data (BTC/ETH/BNB/ADA)
-        run: |
-          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/
-          unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
-
-      - name: Download Crypto news
-        run: |
-          kaggle datasets download -d oliviervha/crypto-news -p data/raw/
-          unzip -o data/raw/crypto-news.zip -d data/raw/
-
-      - name: Set up Python 3.13
+      - name: Setup Python 3.13
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
 
       - name: Install dependencies
-        run: pip install papermill pandas seaborn scikit-learn missingno matplotlib ipykernel ipython-autotime
+        run: |
+          pip install papermill pandas seaborn scikit-learn missingno matplotlib \
+                      xgboost lightgbm joblib ipykernel ipython-autotime
 
-      - name: Install Jupyter kernel
+      - name: Register python3 kernel
         run: |
           python -m ipykernel install --sys-prefix --name python3 --display-name python3
 
@@ -87,47 +58,21 @@ jobs:
           papermill \
             notebooks/1_eda_preprocessing.ipynb \
             reports/1_eda_preprocessing_output.ipynb \
-            -p DATA_RAW data/raw \
+            -p DATA_RAW     data/raw \
             -p DATA_INTERIM data/interim \
             --log-output
 
-      - name: Upload interim data
+      - name: Persist interim data
         uses: actions/upload-artifact@v4
         with:
           name: interim-data
           path: data/interim/
 
-      - name: Upload EDA report
+      - name: Persist EDA report
         uses: actions/upload-artifact@v4
         with:
           name: eda-report
           path: reports/1_eda_preprocessing_output.ipynb
-
-  fe:
-    needs: check_changes
-    if: needs.check_changes.outputs.fe  == 'true' ||
-       needs.check_changes.outputs.eda == 'true' ||
-       needs.check_changes.outputs.config == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Download interim data (if newly created)
-        if: needs.check_changes.outputs.eda == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: interim-data
-          path: data/interim/
-
-      - name: Setup Python & dependencies
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.13'
-      - run: pip install papermill pandas seaborn scikit-learn matplotlib ipykernel ipython-autotime
-
-      - name: Install Jupyter kernel
-        run: |
-          python -m ipykernel install --sys-prefix --name python3 --display-name python3
 
       - name: Run Notebook 2:Feature Engineering
         run: |
@@ -135,104 +80,46 @@ jobs:
           papermill \
             notebooks/2_feature_engineering.ipynb \
             reports/2_feature_engineering_output.ipynb \
-            -p DATA_INTERIM data/interim \
+            -p DATA_INTERIM   data/interim \
             -p DATA_PROCESSED data/processed \
             --log-output
 
-      - name: Upload processed data
+      - name: Persist processed data
         uses: actions/upload-artifact@v4
         with:
           name: processed-data
           path: data/processed/
 
-      - name: Upload FE report
+      - name: Persist FE report
         uses: actions/upload-artifact@v4
         with:
           name: fe-report
           path: reports/2_feature_engineering_output.ipynb
 
-  model:
-    needs: [check_changes, fe]
-    if: needs.check_changes.outputs.model == 'true' ||
-       needs.check_changes.outputs.fe    == 'true' ||
-       needs.check_changes.outputs.eda   == 'true' ||
-       needs.check_changes.outputs.config== 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Download processed data (if newly created)
-        if: needs.check_changes.outputs.fe == 'true'
-        uses: actions/download-artifact@v4
-        with:
-          name: processed-data
-          path: data/processed/
-
-      - name: Setup Python & dependencies
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.13'
-      - run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib ipykernel ipython-autotime
-
-      - name: Install Jupyter kernel
-        run: |
-          python -m ipykernel install --sys-prefix --name python3 --display-name python3
-
       - name: Run Notebook 3:Modeling
         run: |
-          mkdir -p reports src/models
+          mkdir -p reports src/models src/final_model
           papermill \
             notebooks/3_modeling.ipynb \
             reports/3_modeling_output.ipynb \
             -p DATA_PROCESSED data/processed \
-            -p MODEL_DIR src/models \
+            -p MODEL_DIR     src/models \
             --log-output
 
-      - name: Upload model artifacts
+      - name: Persist all model files
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-artifacts
+          path: src/models/
+
+      - name: Persist final best model
         uses: actions/upload-artifact@v4
         with:
           name: final-model
-          path: src/models/
+          path: src/final_model/
 
-      - name: Upload Modeling report
+      - name: Persist Modeling report
         uses: actions/upload-artifact@v4
         with:
           name: model-report
           path: reports/3_modeling_output.ipynb
-
-  sensitivity:
-    needs: [check_changes, model]
-    if: needs.check_changes.outputs.sensitivity == 'true' ||
-       needs.check_changes.outputs.model       == 'true' ||
-       needs.check_changes.outputs.fe          == 'true' ||
-       needs.check_changes.outputs.eda         == 'true' ||
-       needs.check_changes.outputs.config      == 'true'
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v3
-
-      - name: Setup Python & dependencies
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.13'
-      - run: pip install papermill pandas seaborn scikit-learn matplotlib joblib ipykernel ipython-autotime
-
-      - name: Install Jupyter kernel
-        run: |
-          python -m ipykernel install --sys-prefix --name python3 --display-name python3
-
-      - name: Run Notebook 4:Sensitivity Tests
-        run: |
-          mkdir -p reports
-          papermill \
-            notebooks/4_sensitivity.ipynb \
-            reports/4_sensitivity_output.ipynb \
-            -p DATA_PROCESSED data/processed \
-            -p MODEL_DIR src/models \
-            --log-output
-
-      - name: Upload Sensitivity report
-        uses: actions/upload-artifact@v4
-        with:
-          name: sensitivity-report
-          path: reports/4_sensitivity_output.ipynb
