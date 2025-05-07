@@ -55,4 +55,6 @@ jobs:
           commit_user_name:  github-actions[bot]
           commit_user_email: github-actions[bot]@users.noreply.github.com
           commit_message:          "ci: update models & modeling report"
-          file_pattern:     "reports/3_modeling_output.ipynb,src/models/"
+          file_pattern:     |
+            reports/3_modeling_output.ipynb
+            src/models/
