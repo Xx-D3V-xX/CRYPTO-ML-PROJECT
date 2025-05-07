@@ -1,63 +1,40 @@
-name: train
+name: Run EDA Notebook
 
 on:
   push:
-    branches:
-      - main
     paths:
-      - 'notebooks/**'
-      - '.github/workflows/train.yml'
+      - 'notebooks/1_eda_preprocessing.ipynb'
+      - '.github/workflows/run-eda.yml'
 
 jobs:
-  run-all-notebooks:
+  eda:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
         with:
+          lfs: true
           persist-credentials: true
 
       - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
+
       - name: Install dependencies
         run: |
           pip install \
-            kaggle \
             papermill \
-            pandas seaborn scikit-learn missingno matplotlib \
-            ipykernel ipython-autotime \
-            xgboost lightgbm joblib
+            pandas seaborn missingno matplotlib \
+            ipykernel ipython-autotime
 
-      - name: Configure Kaggle credentials
-        env:
-          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
-          KAGGLE_KEY:      ${{ secrets.KAGGLE_KEY }}
-        run: |
-          mkdir -p ~/.kaggle
-          cat <<EOF > ~/.kaggle/kaggle.json
-          {"username":"$KAGGLE_USERNAME","key":"$KAGGLE_KEY"}
-          EOF
-          chmod 600 ~/.kaggle/kaggle.json
-
-      - name: Install Jupyter kernel
+      - name: Register Jupyter kernel
         run: |
           python -m ipykernel install \
             --sys-prefix \
             --name python3 \
             --display-name python3
 
-      - name: Download raw data from Kaggle
-        run: |
-          rm -rf data/raw && mkdir -p data/raw
-          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/
-          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
-          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/
-          unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
-          kaggle datasets download -d oliviervha/crypto-news -p data/raw/
-          unzip -o data/raw/crypto-news.zip -d data/raw/
-
-      - name: Run Notebook 1 (EDA & Preprocessing)
+      - name: Execute EDA & Preprocessing
         run: |
           mkdir -p reports data/interim
           papermill \
@@ -67,37 +44,10 @@ jobs:
             -p DATA_INTERIM data/interim \
             --log-output
 
-      - name: Run Notebook 2 (Feature Engineering)
-        run: |
-          mkdir -p reports data/processed
-          papermill \
-            notebooks/2_feature_engineering.ipynb \
-            reports/2_feature_engineering_output.ipynb \
-            -p DATA_INTERIM   data/interim \
-            -p DATA_PROCESSED data/processed \
-            --log-output
-
-      - name: Run Notebook 3 (Modeling)
-        run: |
-          mkdir -p reports src/models src/final_model
-          papermill \
-            notebooks/3_modeling.ipynb \
-            reports/3_modeling_output.ipynb \
-            -p DATA_PROCESSED data/processed \
-            -p MODEL_DIR      src/models \
-            --log-output
-
-      - name: Organize final model
-        run: |
-          mv src/models/final_*.pkl src/final_model/
-
-      - name: Commit & push outputs
+      - name: Commit & push EDA outputs
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          commit_message: "ci: update interim, processed, models & reports"
+          commit_message: "ci: update EDA report & interim data"
           file_pattern: |
             data/interim/**
-            data/processed/**
-            src/models/**
-            src/final_model/**
-            reports/**
+            reports/1_eda_preprocessing_output.ipynb
