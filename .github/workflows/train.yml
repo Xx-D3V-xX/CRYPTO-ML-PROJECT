@@ -193,7 +193,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: final-model
-          path: src/final_model/
+          path: src/models/final_*.pkl
 
       - name: Upload Modeling report
         uses: actions/upload-artifact@v4
