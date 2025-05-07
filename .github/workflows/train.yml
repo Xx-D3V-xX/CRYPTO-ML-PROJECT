@@ -1,4 +1,4 @@
-name: Run EDA Notebook
+name: PDS Project
 
 on:
   push:
