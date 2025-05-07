@@ -2,6 +2,8 @@ name: train
 
 on:
   push:
+    branches:
+      - main
     paths:
       - 'notebooks/**'
       - '.github/workflows/train.yml'
@@ -10,55 +12,52 @@ jobs:
   run-all-notebooks:
     runs-on: ubuntu-latest
     steps:
+      - uses: actions/checkout@v3
+        with:
+          persist-credentials: true
 
-      - name: Checkout
-        uses: actions/checkout@v3
-
-      - name: Install Kaggle CLI
-        run: pip install kaggle
-
-      - name: Configure Kaggle credentials
-        run: |
-          mkdir -p ~/.kaggle
-          cat <<EOF > ~/.kaggle/kaggle.json
-          {
-            "username": "${{ secrets.KAGGLE_USERNAME }}",
-            "key": "${{ secrets.KAGGLE_KEY }}"
-          }
-          EOF
-          chmod 600 ~/.kaggle/kaggle.json
-
-      - name: Download raw datasets
-        run: |
-          rm -rf data/raw && mkdir -p data/raw
-
-          # CoinMarketCap
-          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/
-          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
-
-          # Historical sentiment
-          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/
-          unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
-
-          # Crypto news
-          kaggle datasets download -d oliviervha/crypto-news -p data/raw/
-          unzip -o data/raw/crypto-news.zip -d data/raw/
-
-      - name: Setup Python 3.13
+      - name: Setup Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
-
       - name: Install dependencies
         run: |
-          pip install papermill pandas seaborn scikit-learn missingno matplotlib \
-                      xgboost lightgbm joblib ipykernel ipython-autotime
+          pip install \
+            kaggle \
+            papermill \
+            pandas seaborn scikit-learn missingno matplotlib \
+            ipykernel ipython-autotime \
+            xgboost lightgbm joblib
 
-      - name: Register python3 kernel
+      - name: Configure Kaggle credentials
+        env:
+          KAGGLE_USERNAME: ${{ secrets.KAGGLE_USERNAME }}
+          KAGGLE_KEY:      ${{ secrets.KAGGLE_KEY }}
         run: |
-          python -m ipykernel install --sys-prefix --name python3 --display-name python3
+          mkdir -p ~/.kaggle
+          cat <<EOF > ~/.kaggle/kaggle.json
+          {"username":"$KAGGLE_USERNAME","key":"$KAGGLE_KEY"}
+          EOF
+          chmod 600 ~/.kaggle/kaggle.json
 
-      - name: Run Notebook 1:EDA & Preprocessing
+      - name: Install Jupyter kernel
+        run: |
+          python -m ipykernel install \
+            --sys-prefix \
+            --name python3 \
+            --display-name python3
+
+      - name: Download raw data from Kaggle
+        run: |
+          rm -rf data/raw && mkdir -p data/raw
+          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/
+          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
+          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/
+          unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
+          kaggle datasets download -d oliviervha/crypto-news -p data/raw/
+          unzip -o data/raw/crypto-news.zip -d data/raw/
+
+      - name: Run Notebook 1 (EDA & Preprocessing)
         run: |
           mkdir -p reports data/interim
           papermill \
@@ -68,19 +67,7 @@ jobs:
             -p DATA_INTERIM data/interim \
             --log-output
 
-      - name: Persist interim data
-        uses: actions/upload-artifact@v4
-        with:
-          name: interim-data
-          path: data/interim/
-
-      - name: Persist EDA report
-        uses: actions/upload-artifact@v4
-        with:
-          name: eda-report
-          path: reports/1_eda_preprocessing_output.ipynb
-
-      - name: Run Notebook 2:Feature Engineering
+      - name: Run Notebook 2 (Feature Engineering)
         run: |
           mkdir -p reports data/processed
           papermill \
@@ -90,42 +77,27 @@ jobs:
             -p DATA_PROCESSED data/processed \
             --log-output
 
-      - name: Persist processed data
-        uses: actions/upload-artifact@v4
-        with:
-          name: processed-data
-          path: data/processed/
-
-      - name: Persist FE report
-        uses: actions/upload-artifact@v4
-        with:
-          name: fe-report
-          path: reports/2_feature_engineering_output.ipynb
-
-      - name: Run Notebook 3:Modeling
+      - name: Run Notebook 3 (Modeling)
         run: |
           mkdir -p reports src/models src/final_model
           papermill \
             notebooks/3_modeling.ipynb \
             reports/3_modeling_output.ipynb \
             -p DATA_PROCESSED data/processed \
-            -p MODEL_DIR     src/models \
+            -p MODEL_DIR      src/models \
             --log-output
 
-      - name: Persist all model files
-        uses: actions/upload-artifact@v4
-        with:
-          name: model-artifacts
-          path: src/models/
+      - name: Organize final model
+        run: |
+          mv src/models/final_*.pkl src/final_model/
 
-      - name: Persist final best model
-        uses: actions/upload-artifact@v4
+      - name: Commit & push outputs
+        uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          name: final-model
-          path: src/final_model/
-
-      - name: Persist Modeling report
-        uses: actions/upload-artifact@v4
-        with:
-          name: model-report
-          path: reports/3_modeling_output.ipynb
+          commit_message: "ci: update interim, processed, models & reports"
+          file_pattern: |
+            data/interim/**
+            data/processed/**
+            src/models/**
+            src/final_model/**
+            reports/**
