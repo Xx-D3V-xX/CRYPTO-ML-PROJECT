@@ -31,12 +31,18 @@ jobs:
       - name: Download raw datasets
         run: |
           rm -rf data/raw && mkdir -p data/raw
-          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/ \
-            && unzip -o data/raw/*.zip -d data/raw/ \
-          && kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/ \
-            && unzip -o data/raw/*.zip -d data/raw/ \
-          && kaggle datasets download -d oliviervha/crypto-news -p data/raw/ \
-            && unzip -o data/raw/*.zip -d data/raw/
+
+          # CoinMarketCap
+          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/
+          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
+
+          # Historical sentiment
+          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/
+          unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
+
+          # Crypto news
+          kaggle datasets download -d oliviervha/crypto-news -p data/raw/
+          unzip -o data/raw/crypto-news.zip -d data/raw/
 
       - name: Setup Python 3.13
         uses: actions/setup-python@v4
