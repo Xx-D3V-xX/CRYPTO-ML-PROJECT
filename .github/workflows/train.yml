@@ -11,10 +11,10 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Check out repository (with LFS)
+      - name: Check out repository (no LFS)
         uses: actions/checkout@v3
         with:
-          lfs: true
+          lfs: false
           fetch-depth: 0
           persist-credentials: true
 
@@ -55,4 +55,4 @@ jobs:
           commit_user_name:  github-actions[bot]
           commit_user_email: github-actions[bot]@users.noreply.github.com
           commit_message:          "ci: update models & modeling report"
-          file_pattern:     "."
+          file_pattern:     "reports/3_modeling_output.ipynb,src/models/"
