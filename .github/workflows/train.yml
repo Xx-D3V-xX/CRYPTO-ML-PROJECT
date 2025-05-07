@@ -14,7 +14,6 @@ jobs:
       - name: Check out repository (no LFS)
         uses: actions/checkout@v3
         with:
-          lfs: false
           fetch-depth: 0
           persist-credentials: true
 
