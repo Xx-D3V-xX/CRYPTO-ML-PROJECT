@@ -1,8 +1,5 @@
 name: train
 
-permissions:
-  contents: write    # allow pushing committed outputs back to the repo
-
 on:
   push:
     paths:
@@ -21,11 +18,9 @@ jobs:
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
-        with:
-          persist-credentials: true
 
-      - name: Detect changed notebooks & config
-        id: filter
+      - id: filter
+        name: Detect changed notebooks & config
         uses: dorny/paths-filter@v3
         with:
           filters: |
@@ -42,13 +37,12 @@ jobs:
 
   eda:
     needs: check_changes
-    if: needs.check_changes.outputs.eda == 'true' || needs.check_changes.outputs.config == 'true'
+    if: needs.check_changes.outputs.eda == 'true' ||
+        needs.check_changes.outputs.config == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
-        with:
-          persist-credentials: true
 
       - name: Install Kaggle CLI
         run: pip install kaggle
@@ -64,16 +58,22 @@ jobs:
           EOF
           chmod 600 ~/.kaggle/kaggle.json
 
-      - name: Download raw datasets
+      - name: Download CoinMarketCap historical
         run: |
-          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/ && \
-          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/ && \
-          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/ && \
-          unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/ && \
-          kaggle datasets download -d oliviervha/crypto-news -p data/raw/ && \
+          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/
+          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
+
+      - name: Download Sentiment data (BTC/ETH/BNB/ADA)
+        run: |
+          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/
+          unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
+
+      - name: Download Crypto news
+        run: |
+          kaggle datasets download -d oliviervha/crypto-news -p data/raw/
           unzip -o data/raw/crypto-news.zip -d data/raw/
 
-      - name: Set up Python & deps
+      - name: Setup Python & deps
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
@@ -85,128 +85,150 @@ jobs:
 
       - name: Run Notebook 1:EDA & Preprocessing
         run: |
-          mkdir -p data/interim reports
+          mkdir -p reports data/interim
           papermill \
             notebooks/1_eda_preprocessing.ipynb \
             reports/1_eda_preprocessing_output.ipynb \
-            -p DATA_RAW     data/raw \
+            -p DATA_RAW data/raw \
             -p DATA_INTERIM data/interim \
             --log-output
 
-      - name: Commit EDA outputs
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/interim/ reports/1_eda_preprocessing_output.ipynb
-          git commit -m "ci: update interim data & EDA report" || echo "⏩ no changes"
-          git pull --rebase --autostash origin ${{ github.ref_name }}
-          git push origin HEAD:${{ github.ref_name }}
+      - name: Upload interim data
+        uses: actions/upload-artifact@v4
+        with:
+          name: interim-data
+          path: data/interim/
+
+      - name: Upload EDA report
+        uses: actions/upload-artifact@v4
+        with:
+          name: eda-report
+          path: reports/1_eda_preprocessing_output.ipynb
 
   fe:
-    needs: [check_changes, eda]
-    if: needs.check_changes.outputs.fe == 'true' || needs.check_changes.outputs.config == 'true'
+    needs: check_changes
+    if: needs.check_changes.outputs.fe  == 'true' ||
+       needs.check_changes.outputs.eda == 'true' ||
+       needs.check_changes.outputs.config == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
-        with:
-          persist-credentials: true
 
-      - name: Ensure interim data exists
-        run: |
-          mkdir -p data/interim
-          if [ ! -f data/interim/historical_clean.csv ]; then
-            echo "→ Missing interim data; running Notebook 1 to bootstrap…"
-            papermill notebooks/1_eda_preprocessing.ipynb /tmp/eda.ipynb \
-              -p DATA_RAW     data/raw \
-              -p DATA_INTERIM data/interim \
-              --log-output
-          fi
-
-      - name: Set up Python & deps
+      - name: Setup Python & deps
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
       - run: pip install papermill pandas seaborn scikit-learn matplotlib ipykernel ipython-autotime
 
       - name: Install Jupyter kernel
-        run: python -m ipykernel install --sys-prefix --name python3 --display-name python3
+        run: |
+          python -m ipykernel install --sys-prefix --name python3 --display-name python3
 
       - name: Run Notebook 2:Feature Engineering
         run: |
-          mkdir -p data/processed reports
+          mkdir -p reports data/processed
           papermill \
             notebooks/2_feature_engineering.ipynb \
             reports/2_feature_engineering_output.ipynb \
-            -p DATA_INTERIM   data/interim \
+            -p DATA_INTERIM data/interim \
             -p DATA_PROCESSED data/processed \
             --log-output
 
-      - name: Commit FE outputs
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add data/processed/ reports/2_feature_engineering_output.ipynb
-          git commit -m "ci: update processed data & FE report" || echo "⏩ no changes"
-          git pull --rebase --autostash origin ${{ github.ref_name }}
-          git push origin HEAD:${{ github.ref_name }}
+      - name: Upload processed data
+        uses: actions/upload-artifact@v4
+        with:
+          name: processed-data
+          path: data/processed/
+
+      - name: Upload FE report
+        uses: actions-upload-artifact@v4
+        with:
+          name: fe-report
+          path: reports/2_feature_engineering_output.ipynb
 
   model:
     needs: [check_changes, fe]
-    if: needs.check_changes.outputs.model == 'true' || needs.check_changes.outputs.config == 'true'
+    if: needs.check_changes.outputs.model  == 'true' ||
+       needs.check_changes.outputs.fe     == 'true' ||
+       needs.check_changes.outputs.eda    == 'true' ||
+       needs.check_changes.outputs.config == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
-        with:
-          persist-credentials: true
 
-      - name: Set up Python & deps
+      - name: Download processed data
+        uses: actions/download-artifact@v4
+        with:
+          name: processed-data
+          path: data/processed/
+
+      - name: Setup Python & deps
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
       - run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib ipykernel ipython-autotime
 
       - name: Install Jupyter kernel
-        run: python -m ipykernel install --sys-prefix --name python3 --display-name python3
+        run: |
+          python -m ipykernel install --sys-prefix --name python3 --display-name python3
 
       - name: Run Notebook 3:Modeling
         run: |
-          mkdir -p src/models reports
+          mkdir -p reports src/models
           papermill \
             notebooks/3_modeling.ipynb \
             reports/3_modeling_output.ipynb \
             -p DATA_PROCESSED data/processed \
-            -p MODEL_DIR      src/models \
+            -p MODEL_DIR src/models \
             --log-output
 
-      - name: Commit Modeling outputs
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add src/models/ reports/3_modeling_output.ipynb
-          git commit -m "ci: update models & modeling report" || echo "⏩ no changes"
-          git pull --rebase --autostash origin ${{ github.ref_name }}
-          git push origin HEAD:${{ github.ref_name }}
+      - name: Upload model artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: final-model
+          path: src/models/
+
+      - name: Upload Modeling report
+        uses: actions/upload-artifact@v4
+        with:
+          name: model-report
+          path: reports/3_modeling_output.ipynb
 
   sensitivity:
     needs: [check_changes, model]
-    if: needs.check_changes.outputs.sensitivity == 'true' || needs.check_changes.outputs.config == 'true'
+    if: needs.check_changes.outputs.sensitivity == 'true' ||
+       needs.check_changes.outputs.model       == 'true' ||
+       needs.check_changes.outputs.fe          == 'true' ||
+       needs.check_changes.outputs.eda         == 'true' ||
+       needs.check_changes.outputs.config      == 'true'
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repo
         uses: actions/checkout@v3
-        with:
-          persist-credentials: true
 
-      - name: Set up Python & deps
+      - name: Download processed data
+        uses: actions/download-artifact@v4
+        with:
+          name: processed-data
+          path: data/processed/
+
+      - name: Download model artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: final-model
+          path: src/models/
+
+      - name: Setup Python & deps
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
       - run: pip install papermill pandas seaborn scikit-learn matplotlib joblib ipykernel ipython-autotime
 
       - name: Install Jupyter kernel
-        run: python -m ipykernel install --sys-prefix --name python3 --display-name python3
+        run: |
+          python -m ipykernel install --sys-prefix --name python3 --display-name python3
 
       - name: Run Notebook 4:Sensitivity Tests
         run: |
@@ -215,14 +237,11 @@ jobs:
             notebooks/4_sensitivity.ipynb \
             reports/4_sensitivity_output.ipynb \
             -p DATA_PROCESSED data/processed \
-            -p MODEL_DIR      src/models \
+            -p MODEL_DIR src/models \
             --log-output
 
-      - name: Commit Sensitivity report
-        run: |
-          git config user.name  "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add reports/4_sensitivity_output.ipynb
-          git commit -m "ci: update sensitivity report" || echo "⏩ no changes"
-          git pull --rebase --autostash origin ${{ github.ref_name }}
-          git push origin HEAD:${{ github.ref_name }}
+      - name: Upload Sensitivity report
+        uses: actions/upload-artifact@v4
+        with:
+          name: sensitivity-report
+          path: reports/4_sensitivity_output.ipynb
