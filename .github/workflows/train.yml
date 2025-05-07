@@ -1,4 +1,4 @@
-name: Always Run Feature Engineering
+name: Always Run Modeling
 
 permissions:
   contents: write
@@ -7,7 +7,7 @@ on:
   push: {}
 
 jobs:
-  feature_engineering:
+  modeling:
     runs-on: ubuntu-latest
 
     steps:
@@ -28,6 +28,7 @@ jobs:
           pip install \
             papermill \
             pandas seaborn scikit-learn matplotlib \
+            xgboost lightgbm joblib \
             ipykernel ipython-autotime
 
       - name: Install Jupyter kernel
@@ -37,21 +38,21 @@ jobs:
             --name python3 \
             --display-name python3
 
-      - name: Run Notebook 2:Feature Engineering
+      - name: Run Notebook 3:Modeling
         run: |
-          mkdir -p reports data/processed
+          mkdir -p reports src/models
           papermill \
-            notebooks/2_feature_engineering.ipynb \
-            reports/2_feature_engineering_output.ipynb \
-            -p DATA_INTERIM   data/interim \
+            notebooks/3_modeling.ipynb \
+            reports/3_modeling_output.ipynb \
             -p DATA_PROCESSED data/processed \
+            -p MODEL_DIR      src/models \
             --log-output
 
-      - name: Commit & Push FE outputs
+      - name: Commit & Push modeling outputs
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          branch:        ${{ github.ref_name }}
+          branch:           ${{ github.ref_name }}
           commit_user_name:  github-actions[bot]
           commit_user_email: github-actions[bot]@users.noreply.github.com
-          commit_message: "ci: update processed data & FE report"
-          file_pattern:  "."
+          commit_message:          "ci: update models & modeling report"
+          file_pattern:     "."
