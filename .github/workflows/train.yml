@@ -1,4 +1,4 @@
-name: Always Run EDA Notebook
+name: Always Run Feature Engineering
 
 permissions:
   contents: write
@@ -7,7 +7,7 @@ on:
   push: {}
 
 jobs:
-  eda:
+  fe:
     runs-on: ubuntu-latest
 
     steps:
@@ -26,7 +26,7 @@ jobs:
         run: |
           pip install \
             papermill \
-            pandas seaborn missingno matplotlib \
+            pandas seaborn scikit-learn matplotlib \
             ipykernel ipython-autotime
 
       - name: Register Jupyter kernel
@@ -36,21 +36,21 @@ jobs:
             --name python3 \
             --display-name python3
 
-      - name: Execute EDA & Preprocessing
+      - name: Run Feature Engineering Notebook
         run: |
-          mkdir -p reports data/interim
+          mkdir -p reports data/processed
           papermill \
-            notebooks/1_eda_preprocessing.ipynb \
-            reports/1_eda_preprocessing_output.ipynb \
-            -p DATA_RAW     data/raw \
-            -p DATA_INTERIM data/interim \
+            notebooks/2_feature_engineering.ipynb \
+            reports/2_feature_engineering_output.ipynb \
+            -p DATA_INTERIM   data/interim \
+            -p DATA_PROCESSED data/processed \
             --log-output
 
-      - name: Commit & Push EDA outputs
+      - name: Commit & Push FE outputs
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
           branch: ${{ github.ref_name }}
-          commit_message: "ci: update EDA report & interim data"
+          commit_message: "ci: update processed data & FE report"
           file_pattern: |
-            data/interim/*.csv
-            reports/1_eda_preprocessing_output.ipynb
+            data/processed/*.csv
+            reports/2_feature_engineering_output.ipynb
