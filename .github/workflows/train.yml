@@ -41,8 +41,7 @@ jobs:
         needs.check_changes.outputs.config == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
       - name: Install Kaggle CLI
         run: pip install kaggle
@@ -58,23 +57,14 @@ jobs:
           EOF
           chmod 600 ~/.kaggle/kaggle.json
 
-      - name: Download CoinMarketCap historical
+      - name: Download datasets
         run: |
-          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/
-          unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
+          kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/ && unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
+          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/ && unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
+          kaggle datasets download -d oliviervha/crypto-news -p data/raw/ && unzip -o data/raw/crypto-news.zip -d data/raw/
 
-      - name: Download Sentiment data (BTC/ETH/BNB/ADA)
-        run: |
-          kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/
-          unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
-
-      - name: Download Crypto news
-        run: |
-          kaggle datasets download -d oliviervha/crypto-news -p data/raw/
-          unzip -o data/raw/crypto-news.zip -d data/raw/
-
-      - name: Setup Python & deps
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
+        name: Setup Python & deps
         with:
           python-version: '3.13'
       - run: pip install papermill pandas seaborn scikit-learn missingno matplotlib ipykernel ipython-autotime
@@ -93,30 +83,35 @@ jobs:
             -p DATA_INTERIM data/interim \
             --log-output
 
-      - name: Upload interim data
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
+        name: Upload interim data
         with:
           name: interim-data
           path: data/interim/
 
-      - name: Upload EDA report
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
+        name: Upload EDA report
         with:
           name: eda-report
           path: reports/1_eda_preprocessing_output.ipynb
 
   fe:
     needs: check_changes
-    if: needs.check_changes.outputs.fe  == 'true' ||
-       needs.check_changes.outputs.eda == 'true' ||
+    if: needs.check_changes.outputs.fe     == 'true' ||
+       needs.check_changes.outputs.eda    == 'true' ||
        needs.check_changes.outputs.config == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Setup Python & deps
-        uses: actions/setup-python@v4
+      - uses: actions/download-artifact@v4
+        name: Download interim data
+        with:
+          name: interim-data
+          path: data/interim/
+
+      - uses: actions/setup-python@v4
+        name: Setup Python & deps
         with:
           python-version: '3.13'
       - run: pip install papermill pandas seaborn scikit-learn matplotlib ipykernel ipython-autotime
@@ -135,14 +130,14 @@ jobs:
             -p DATA_PROCESSED data/processed \
             --log-output
 
-      - name: Upload processed data
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
+        name: Upload processed data
         with:
           name: processed-data
           path: data/processed/
 
-      - name: Upload FE report
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
+        name: Upload FE report
         with:
           name: fe-report
           path: reports/2_feature_engineering_output.ipynb
@@ -155,17 +150,16 @@ jobs:
        needs.check_changes.outputs.config == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Download processed data
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
+        name: Download processed data
         with:
           name: processed-data
           path: data/processed/
 
-      - name: Setup Python & deps
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
+        name: Setup Python & deps
         with:
           python-version: '3.13'
       - run: pip install papermill pandas seaborn scikit-learn matplotlib xgboost lightgbm joblib ipykernel ipython-autotime
@@ -184,14 +178,14 @@ jobs:
             -p MODEL_DIR src/models \
             --log-output
 
-      - name: Upload model artifacts
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
+        name: Upload model artifacts
         with:
           name: final-model
           path: src/models/
 
-      - name: Upload Modeling report
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
+        name: Upload Modeling report
         with:
           name: model-report
           path: reports/3_modeling_output.ipynb
@@ -205,23 +199,22 @@ jobs:
        needs.check_changes.outputs.config      == 'true'
     runs-on: ubuntu-latest
     steps:
-      - name: Checkout repo
-        uses: actions/checkout@v3
+      - uses: actions/checkout@v3
 
-      - name: Download processed data
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
+        name: Download processed data
         with:
           name: processed-data
           path: data/processed/
 
-      - name: Download model artifact
-        uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v4
+        name: Download model artifact
         with:
           name: final-model
           path: src/models/
 
-      - name: Setup Python & deps
-        uses: actions/setup-python@v4
+      - uses: actions/setup-python@v4
+        name: Setup Python & deps
         with:
           python-version: '3.13'
       - run: pip install papermill pandas seaborn scikit-learn matplotlib joblib ipykernel ipython-autotime
@@ -240,8 +233,8 @@ jobs:
             -p MODEL_DIR src/models \
             --log-output
 
-      - name: Upload Sensitivity report
-        uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v4
+        name: Upload Sensitivity report
         with:
           name: sensitivity-report
           path: reports/4_sensitivity_output.ipynb
