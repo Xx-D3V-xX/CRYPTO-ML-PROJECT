@@ -17,7 +17,7 @@ jobs:
           lfs: true
           persist-credentials: true
 
-      - name: Set up Python
+      - name: Set up Python 3.13
         uses: actions/setup-python@v4
         with:
           python-version: '3.13'
@@ -36,7 +36,7 @@ jobs:
             --name python3 \
             --display-name python3
 
-      - name: Run Feature Engineering Notebook
+      - name: Run Feature Engineering
         run: |
           mkdir -p reports data/processed
           papermill \
@@ -53,4 +53,4 @@ jobs:
           commit_message: "ci: update processed data & FE report"
           file_pattern: |
             data/processed/*.csv
-            reports/2_feature_engineering_output.ipynb
+            reports/**/*.ipynb
