@@ -7,20 +7,21 @@ on:
   push: {}
 
 jobs:
-  fe:
+  feature_engineering:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repository
+      - name: Check out repository (with LFS)
         uses: actions/checkout@v3
         with:
           lfs: true
+          fetch-depth: 0
           persist-credentials: true
 
       - name: Set up Python 3.13
         uses: actions/setup-python@v4
         with:
-          python-version: '3.13'
+          python-version: "3.13"
 
       - name: Install dependencies
         run: |
@@ -29,14 +30,14 @@ jobs:
             pandas seaborn scikit-learn matplotlib \
             ipykernel ipython-autotime
 
-      - name: Register Jupyter kernel
+      - name: Install Jupyter kernel
         run: |
           python -m ipykernel install \
             --sys-prefix \
             --name python3 \
             --display-name python3
 
-      - name: Run Feature Engineering
+      - name: Run Notebook 2:Feature Engineering
         run: |
           mkdir -p reports data/processed
           papermill \
@@ -49,8 +50,8 @@ jobs:
       - name: Commit & Push FE outputs
         uses: stefanzweifel/git-auto-commit-action@v4
         with:
-          branch: ${{ github.ref_name }}
+          branch:        ${{ github.ref_name }}
+          commit_user_name:  github-actions[bot]
+          commit_user_email: github-actions[bot]@users.noreply.github.com
           commit_message: "ci: update processed data & FE report"
-          file_pattern: |
-            data/processed/*.csv
-            reports/**/*.ipynb
+          file_pattern:  "."
