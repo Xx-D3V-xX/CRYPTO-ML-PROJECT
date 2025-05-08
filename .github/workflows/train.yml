@@ -1,202 +1,97 @@
-name: train
+name: train-all-notebooks
 
 on:
   push:
     branches: [ main ]
 
 jobs:
-  eda:
+  run-notebooks:
     runs-on: ubuntu-latest
+
     steps:
-      - name: Checkout code (disable LFS)
-        uses: actions/checkout@v3
-        with:
-          lfs: false
+    - name: Checkout repo
+      uses: actions/checkout@v3
+      with:
+        persist-credentials: true
 
-      - name: Install Kaggle CLI
-        run: pip install kaggle
+    - name: Install Kaggle CLI
+      run: pip install kaggle
 
-      - name: Configure Kaggle credentials
-        run: |
-          mkdir -p ~/.kaggle
-          cat <<EOF > ~/.kaggle/kaggle.json
-          {
-            "username": "${{ secrets.KAGGLE_USERNAME }}",
-            "key":      "${{ secrets.KAGGLE_KEY }}"
-          }
-          EOF
-          chmod 600 ~/.kaggle/kaggle.json
+    - name: Configure Kaggle credentials
+      run: |
+        mkdir -p ~/.kaggle
+        cat <<EOF > ~/.kaggle/kaggle.json
+        {
+          "username":"${{ secrets.KAGGLE_USERNAME }}",
+          "key":"${{ secrets.KAGGLE_KEY }}"
+        }
+        EOF
+        chmod 600 ~/.kaggle/kaggle.json
 
-      - name: Download CoinMarketCap historical
-        run: |
-          kaggle datasets download \
-            -d bizzyvinci/coinmarketcap-historical-data \
-            -p data/raw/
+    - name: Prepare raw data
+      run: |
+        rm -rf data/raw && mkdir -p data/raw
+        kaggle datasets download -d bizzyvinci/coinmarketcap-historical-data -p data/raw/ && \
           unzip -o data/raw/coinmarketcap-historical-data.zip -d data/raw/
-
-      - name: Download Sentiment data (BTC/ETH/BNB/ADA)
-        run: |
-          kaggle datasets download \
-            -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada \
-            -p data/raw/
+        kaggle datasets download -d gautamchettiar/historical-sentiment-data-btc-eth-bnb-ada -p data/raw/ && \
           unzip -o data/raw/historical-sentiment-data-btc-eth-bnb-ada.zip -d data/raw/
-
-      - name: Download Crypto news
-        run: |
-          kaggle datasets download \
-            -d oliviervha/crypto-news \
-            -p data/raw/
+        kaggle datasets download -d oliviervha/crypto-news -p data/raw/ && \
           unzip -o data/raw/crypto-news.zip -d data/raw/
 
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.13'
+    - name: Setup Python & dependencies
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.13'
+    - run: |
+        pip install papermill pandas seaborn scikit-learn missingno matplotlib \
+                    xgboost lightgbm joblib ipykernel ipython-autotime
 
-      - name: Install dependencies
-        run: |
-          pip install papermill pandas seaborn scikit-learn missingno \
-                      matplotlib ipykernel ipython-autotime
+    - name: Install Jupyter kernel
+      run: |
+        python -m ipykernel install \
+          --sys-prefix \
+          --name python3 \
+          --display-name python3
 
-      - name: Install Jupyter kernel (python3)
-        run: |
-          python -m ipykernel install \
-            --sys-prefix \
-            --name python3 \
-            --display-name python3
+    - name: Run Notebook 1:EDA & Preprocessing
+      run: |
+        mkdir -p reports data/interim
+        papermill \
+          notebooks/1_eda_preprocessing.ipynb \
+          reports/1_eda_preprocessing_output.ipynb \
+          -p DATA_RAW data/raw \
+          -p DATA_INTERIM data/interim \
+          --log-output
 
-      - name: Run Notebook 1:EDA & Preprocessing
-        run: |
-          mkdir -p reports data/interim
-          papermill \
-            notebooks/1_eda_preprocessing.ipynb \
-            reports/1_eda_preprocessing_output.ipynb \
-            -p DATA_RAW     data/raw \
-            -p DATA_INTERIM data/interim \
-            --log-output
+    - name: Run Notebook 2:Feature Engineering
+      run: |
+        mkdir -p reports data/processed
+        papermill \
+          notebooks/2_feature_engineering.ipynb \
+          reports/2_feature_engineering_output.ipynb \
+          -p DATA_INTERIM   data/interim \
+          -p DATA_PROCESSED data/processed \
+          --log-output
 
-      - name: Upload interim data
-        uses: actions/upload-artifact@v4
-        with:
-          name: interim-data
-          path: data/interim/
+    - name: Run Notebook 3:Modeling
+      run: |
+        mkdir -p reports src/models
+        papermill \
+          notebooks/3_modeling.ipynb \
+          reports/3_modeling_output.ipynb \
+          -p DATA_PROCESSED data/processed \
+          -p MODEL_DIR src/models \
+          --log-output
 
-      - name: Upload EDA report
-        uses: actions/upload-artifact@v4
-        with:
-          name: eda-report
-          path: reports/1_eda_preprocessing_output.ipynb
-
-  fe:
-    needs: eda
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code (disable LFS)
-        uses: actions/checkout@v3
-        with:
-          lfs: false
-
-      - name: Download interim data
-        uses: actions/download-artifact@v4
-        with:
-          name: interim-data
-          path: data/interim/
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.13'
-
-      - name: Install dependencies
-        run: |
-          pip install papermill pandas seaborn scikit-learn matplotlib \
-                      ipykernel ipython-autotime
-
-      - name: Install Jupyter kernel (python3)
-        run: |
-          python -m ipykernel install \
-            --sys-prefix \
-            --name python3 \
-            --display-name python3
-
-      - name: Run Notebook 2:Feature Engineering
-        run: |
-          mkdir -p reports data/processed
-          papermill \
-            notebooks/2_feature_engineering.ipynb \
-            reports/2_feature_engineering_output.ipynb \
-            -p DATA_INTERIM   data/interim \
-            -p DATA_PROCESSED data/processed \
-            --log-output
-
-      - name: Upload processed data
-        uses: actions/upload-artifact@v4
-        with:
-          name: processed-data
-          path: data/processed/
-
-      - name: Upload FE report
-        uses: actions/upload-artifact@v4
-        with:
-          name: fe-report
-          path: reports/2_feature_engineering_output.ipynb
-
-  model:
-    needs: fe
-    runs-on: ubuntu-latest
-    steps:
-      - name: Checkout code (disable LFS)
-        uses: actions/checkout@v3
-        with:
-          lfs: false
-
-      - name: Download processed data
-        uses: actions/download-artifact@v4
-        with:
-          name: processed-data
-          path: data/processed/
-
-      - name: Set up Python 3.13
-        uses: actions/setup-python@v4
-        with:
-          python-version: '3.13'
-
-      - name: Install dependencies
-        run: |
-          pip install papermill pandas seaborn scikit-learn matplotlib \
-                      xgboost lightgbm joblib ipykernel ipython-autotime
-
-      - name: Install Jupyter kernel (python3)
-        run: |
-          python -m ipykernel install \
-            --sys-prefix \
-            --name python3 \
-            --display-name python3
-
-      - name: Run Notebook 3:Modeling
-        run: |
-          mkdir -p reports src/models src/final_model
-          papermill \
-            notebooks/3_modeling.ipynb \
-            reports/3_modeling_output.ipynb \
-            -p DATA_PROCESSED data/processed \
-            -p MODEL_DIR     src/models \
-            --log-output
-
-      - name: Upload all trained models
-        uses: actions/upload-artifact@v4
-        with:
-          name: all-models
-          path: src/models/
-
-      - name: Upload best final model
-        uses: actions/upload-artifact@v4
-        with:
-          name: final-model
-          path: src/models/final_*.pkl
-
-      - name: Upload Modeling report
-        uses: actions/upload-artifact@v4
-        with:
-          name: model-report
-          path: reports/3_modeling_output.ipynb
+    - name: Commit & Push outputs
+      uses: EndBug/add-and-commit@v7
+      with:
+        author_name: github-actions[bot]
+        author_email: github-actions[bot]@users.noreply.github.com
+        message: "ci: update interim/ processed/ models/ reports/"
+        add: |
+          data/interim/**
+          data/processed/**
+          src/models/**
+          reports/**
+        branch: main
